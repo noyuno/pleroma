@@ -60,7 +60,7 @@ config :pleroma, :media_proxy,
 
 # base_url: "https://cache.pleroma.social"
 
-config :pleroma, :chat, enabled: true
+config :pleroma, :chat, enabled: false
 
 config :ecto, json_library: Jason
 
