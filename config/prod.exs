@@ -24,6 +24,7 @@ config :pleroma, Pleroma.Web.Endpoint,
 
 # Do not print debug messages in production
 config :logger, level: :error
+#config :logger, level: :info
 
 # ## SSL Support
 #
