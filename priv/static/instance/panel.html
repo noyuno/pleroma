@@ -1,4 +1,21 @@
 <style>
+.instance-specific-panel ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.instance-specific-panel li {
+    border-bottom: 1px solid;
+    border-color: #222;
+    border-color: var(--border,#222);
+    background-color: #121a24;
+    background-color: var(--bg,#121a24);
+    padding: 0;
+}
+.instance-specific-panel-ul a {
+    display: block;
+    padding: .8em .85em;
+}
 .custom-button {
     box-sizing: border-box;
     width: 100%;
@@ -21,16 +38,14 @@
 }
 </style>
 <div style="margin-left:12px; margin-right:12px">
-<p>s.noyuno.space は <a href="https://pleroma.social" target="_blank">Pleroma</a> インスタンスです．<br>
-Pleroma インスタンスは他の Mastodon インスタンスと連携できます．
-また，より使いやすい Mastodon フロントエンドもあります．
-</p>
-<div class="custom-button">
-<a href="/web" class="custom-button-a">Mastodon フロントエンド</a>
+    <div class="custom-button"><a href="/web" class="custom-button-a">Mastodon フロントエンド</a></div>
 </div>
-<ul>
-    <li>500文字</li>
-    <li>mstdn.jpのカスタム絵文字使用可能</li>
+
+<div class="panel panel-default" style="box-shadow: none">
+<ul class="instance-specific-panel-ul">
+    <li><a target="_blank" href="https://mamemomonga.github.io/mastodon-custom-emoji-oekaki/#s.noyuno.space">カスタム絵文字でお絵かきツール</a></li>
+    <li><a target="_blank" href="http://distsn.org/pleroma-instances.html">他のPleromaインスタンス</a></li>
+    <li><a target="_blank" href="/about/more">このインスタンスについて</a></li>
 </ul>
 </div>
 
