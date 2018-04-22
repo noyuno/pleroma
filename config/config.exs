@@ -47,9 +47,9 @@ config :pleroma, :http, proxy_url: nil
 
 config :pleroma, :instance,
   version: version,
-  name: "Pleroma",
-  email: "example@example.com",
-  limit: 5000,
+  name: "s.noyuno.space",
+  email: "noyuno@users.noreply.github.com",
+  limit: 500,
   upload_limit: 16_000_000,
   registrations_open: true,
   federating: true
@@ -60,7 +60,7 @@ config :pleroma, :media_proxy,
 
 # base_url: "https://cache.pleroma.social"
 
-config :pleroma, :chat, enabled: true
+config :pleroma, :chat, enabled: false
 
 config :ecto, json_library: Jason
 

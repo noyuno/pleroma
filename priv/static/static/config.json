@@ -1,8 +1,8 @@
 {
-  "theme": "pleroma-dark",
-  "background": "/static/aurora_borealis.jpg",
+  "theme": "bird",
+  "background": "/static/free-nature.jpg",
   "logo": "/static/logo.png",
   "defaultPath": "/main/all",
-  "chatDisabled": false,
-  "showInstanceSpecificPanel": true
+  "chatDisabled": true,
+  "showInstanceSpecificPanel":true
 }
