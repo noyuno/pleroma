@@ -2,7 +2,8 @@
   "theme": "bird",
   "background": "/static/free-nature.jpg",
   "logo": "/static/logo.png",
-  "defaultPath": "/main/all",
+  "redirectRootNoLogin": "/main/all",
+  "redirectRootLogin": "/main/friends",
   "chatDisabled": true,
   "showInstanceSpecificPanel":true
 }
