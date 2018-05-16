@@ -1,6 +1,6 @@
 defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.{Activity, Repo, Object, Upload, User, Notification}
-  alias Pleroma.Web.ActivityPub.Transmogrifier
+  alias Pleroma.Web.ActivityPub.{Transmogrifier, MRF}
   alias Pleroma.Web.WebFinger
   alias Pleroma.Web.Federator
   alias Pleroma.Web.OStatus
@@ -11,7 +11,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   @httpoison Application.get_env(:pleroma, :httpoison)
 
   @instance Application.get_env(:pleroma, :instance)
-  @rewrite_policy Keyword.get(@instance, :rewrite_policy)
 
   def get_recipients(data) do
     (data["to"] || []) ++ (data["cc"] || [])
@@ -20,7 +19,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def insert(map, local \\ true) when is_map(map) do
     with nil <- Activity.get_by_ap_id(map["id"]),
          map <- lazy_put_activity_defaults(map),
-         {:ok, map} <- @rewrite_policy.filter(map),
+         {:ok, map} <- MRF.filter(map),
          :ok <- insert_full_object(map) do
       {:ok, activity} =
         Repo.insert(%Activity{
@@ -145,6 +144,24 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  def unannounce(
+        %User{} = actor,
+        %Object{} = object,
+        activity_id \\ nil,
+        local \\ true
+      ) do
+    with %Activity{} = announce_activity <- get_existing_announce(actor.ap_id, object),
+         unannounce_data <- make_unannounce_data(actor, announce_activity, activity_id),
+         {:ok, unannounce_activity} <- insert(unannounce_data, local),
+         :ok <- maybe_federate(unannounce_activity),
+         {:ok, _activity} <- Repo.delete(announce_activity),
+         {:ok, object} <- remove_announce_from_object(announce_activity, object) do
+      {:ok, unannounce_activity, announce_activity, object}
+    else
+      _e -> {:ok, object}
+    end
+  end
+
   def follow(follower, followed, activity_id \\ nil, local \\ true) do
     with data <- make_follow_data(follower, followed, activity_id),
          {:ok, activity} <- insert(data, local),
@@ -212,11 +229,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     Repo.all(query)
   end
 
-  # TODO: Make this work properly with unlisted.
   def fetch_public_activities(opts \\ %{}) do
     q = fetch_activities_query(["https://www.w3.org/ns/activitystreams#Public"], opts)
 
     q
+    |> restrict_unlisted()
     |> Repo.all()
     |> Enum.reverse()
   end
@@ -322,6 +339,18 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   defp restrict_blocked(query, _), do: query
+
+  defp restrict_unlisted(query) do
+    from(
+      activity in query,
+      where:
+        fragment(
+          "not (coalesce(?->'cc', '{}'::jsonb) \\?| ?)",
+          activity.data,
+          ^["https://www.w3.org/ns/activitystreams#Public"]
+        )
+    )
+  end
 
   def fetch_activities_query(recipients, opts \\ %{}) do
     base_query =
