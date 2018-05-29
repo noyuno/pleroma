@@ -1,5 +1,5 @@
 CACHE MANIFEST
-#ver:5/16/2018, 10:48:16 AM
+#ver:5/30/2018, 12:56:57 AM
 #plugin:4.8.4
 
 CACHE:
@@ -12,7 +12,6 @@ CACHE:
 /packs/features/account_timeline.js
 /packs/features/home_timeline.js
 /packs/features/public_timeline.js
-/packs/features/direct_timeline.js
 /packs/features/community_timeline.js
 /packs/features/favourited_statuses.js
 /packs/features/list_timeline.js
@@ -21,6 +20,7 @@ CACHE:
 /packs/features/followers.js
 /packs/features/status.js
 /packs/features/account_gallery.js
+/packs/features/lists.js
 /packs/features/blocks.js
 /packs/features/follow_requests.js
 /packs/features/reblogs.js
@@ -35,14 +35,12 @@ CACHE:
 /packs/application.js
 /packs/public.js
 /packs/mailer.js
-/packs/contrast.js
 /packs/default.js
 /packs/admin.js
 /packs/common.js
 /packs/common.css
 /packs/mailer.css
 /packs/default.css
-/packs/contrast.css
 /packs/manifest.json
 
 NETWORK:
