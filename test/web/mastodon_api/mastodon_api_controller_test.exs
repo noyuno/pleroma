@@ -124,6 +124,61 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
     assert Repo.get(Activity, id)
   end
 
+  test "posting a direct status", %{conn: conn} do
+    user1 = insert(:user)
+    user2 = insert(:user)
+    content = "direct cofe @#{user2.nickname}"
+
+    conn =
+      conn
+      |> assign(:user, user1)
+      |> post("api/v1/statuses", %{"status" => content, "visibility" => "direct"})
+
+    assert %{"id" => id, "visibility" => "direct"} = json_response(conn, 200)
+    assert activity = Repo.get(Activity, id)
+    assert activity.recipients == [user2.ap_id]
+    assert activity.data["to"] == [user2.ap_id]
+    assert activity.data["cc"] == []
+  end
+
+  test "direct timeline", %{conn: conn} do
+    user_one = insert(:user)
+    user_two = insert(:user)
+
+    {:ok, user_two} = User.follow(user_two, user_one)
+
+    {:ok, direct} =
+      CommonAPI.post(user_one, %{
+        "status" => "Hi @#{user_two.nickname}!",
+        "visibility" => "direct"
+      })
+
+    {:ok, _follower_only} =
+      CommonAPI.post(user_one, %{
+        "status" => "Hi @#{user_two.nickname}!",
+        "visibility" => "private"
+      })
+
+    # Only direct should be visible here
+    res_conn =
+      conn
+      |> assign(:user, user_two)
+      |> get("api/v1/timelines/direct")
+
+    [status] = json_response(res_conn, 200)
+
+    assert %{"visibility" => "direct"} = status
+    assert status["url"] != direct.data["id"]
+
+    # Both should be visible here
+    res_conn =
+      conn
+      |> assign(:user, user_two)
+      |> get("api/v1/timelines/home")
+
+    [_s1, _s2] = json_response(res_conn, 200)
+  end
+
   test "replying to a status", %{conn: conn} do
     user = insert(:user)
 
@@ -192,6 +247,125 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
       assert %{"error" => _} = json_response(conn, 403)
 
       assert Repo.get(Activity, activity.id) == activity
+    end
+  end
+
+  describe "lists" do
+    test "creating a list", %{conn: conn} do
+      user = insert(:user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> post("/api/v1/lists", %{"title" => "cuties"})
+
+      assert %{"title" => title} = json_response(conn, 200)
+      assert title == "cuties"
+    end
+
+    test "adding users to a list", %{conn: conn} do
+      user = insert(:user)
+      other_user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> post("/api/v1/lists/#{list.id}/accounts", %{"account_ids" => [other_user.id]})
+
+      assert %{} == json_response(conn, 200)
+      %Pleroma.List{following: following} = Pleroma.List.get(list.id, user)
+      assert following == [other_user.follower_address]
+    end
+
+    test "removing users from a list", %{conn: conn} do
+      user = insert(:user)
+      other_user = insert(:user)
+      third_user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+      {:ok, list} = Pleroma.List.follow(list, other_user)
+      {:ok, list} = Pleroma.List.follow(list, third_user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> delete("/api/v1/lists/#{list.id}/accounts", %{"account_ids" => [other_user.id]})
+
+      assert %{} == json_response(conn, 200)
+      %Pleroma.List{following: following} = Pleroma.List.get(list.id, user)
+      assert following == [third_user.follower_address]
+    end
+
+    test "listing users in a list", %{conn: conn} do
+      user = insert(:user)
+      other_user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+      {:ok, list} = Pleroma.List.follow(list, other_user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> get("/api/v1/lists/#{list.id}/accounts", %{"account_ids" => [other_user.id]})
+
+      assert [%{"id" => id}] = json_response(conn, 200)
+      assert id == to_string(other_user.id)
+    end
+
+    test "retrieving a list", %{conn: conn} do
+      user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> get("/api/v1/lists/#{list.id}")
+
+      assert %{"id" => id} = json_response(conn, 200)
+      assert id == to_string(list.id)
+    end
+
+    test "renaming a list", %{conn: conn} do
+      user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put("/api/v1/lists/#{list.id}", %{"title" => "newname"})
+
+      assert %{"title" => name} = json_response(conn, 200)
+      assert name == "newname"
+    end
+
+    test "deleting a list", %{conn: conn} do
+      user = insert(:user)
+      {:ok, list} = Pleroma.List.create("name", user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> delete("/api/v1/lists/#{list.id}")
+
+      assert %{} = json_response(conn, 200)
+      assert is_nil(Repo.get(Pleroma.List, list.id))
+    end
+
+    test "list timeline", %{conn: conn} do
+      user = insert(:user)
+      other_user = insert(:user)
+      {:ok, _activity_one} = TwitterAPI.create_status(user, %{"status" => "Marisa is cute."})
+      {:ok, activity_two} = TwitterAPI.create_status(other_user, %{"status" => "Marisa is cute."})
+      {:ok, list} = Pleroma.List.create("name", user)
+      {:ok, list} = Pleroma.List.follow(list, other_user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> get("/api/v1/timelines/list/#{list.id}")
+
+      assert [%{"id" => id}] = json_response(conn, 200)
+
+      assert id == to_string(activity_two.id)
     end
   end
 

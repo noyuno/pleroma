@@ -67,7 +67,8 @@ defmodule Pleroma.User do
     %{
       following_count: length(user.following) - oneself,
       note_count: user.info["note_count"] || 0,
-      follower_count: user.info["follower_count"] || 0
+      follower_count: user.info["follower_count"] || 0,
+      locked: user.info["locked"] || false
     }
   end
 
@@ -167,28 +168,62 @@ defmodule Pleroma.User do
     end
   end
 
+  def maybe_direct_follow(%User{} = follower, %User{info: info} = followed) do
+    user_info = user_info(followed)
+
+    should_direct_follow =
+      cond do
+        # if the account is locked, don't pre-create the relationship
+        user_info["locked"] == true ->
+          false
+
+        # if the users are blocking each other, we shouldn't even be here, but check for it anyway
+        User.blocks?(follower, followed) == true or User.blocks?(followed, follower) == true ->
+          false
+
+        # if OStatus, then there is no three-way handshake to follow
+        User.ap_enabled?(followed) != true ->
+          true
+
+        # if there are no other reasons not to, just pre-create the relationship
+        true ->
+          true
+      end
+
+    if should_direct_follow do
+      follow(follower, followed)
+    else
+      follower
+    end
+  end
+
   def follow(%User{} = follower, %User{info: info} = followed) do
     ap_followers = followed.follower_address
 
-    if following?(follower, followed) or info["deactivated"] do
-      {:error, "Could not follow user: #{followed.nickname} is already on your list."}
-    else
-      if !followed.local && follower.local && !ap_enabled?(followed) do
-        Websub.subscribe(follower, followed)
-      end
+    cond do
+      following?(follower, followed) or info["deactivated"] ->
+        {:error, "Could not follow user: #{followed.nickname} is already on your list."}
 
-      following =
-        [ap_followers | follower.following]
-        |> Enum.uniq()
+      blocks?(followed, follower) ->
+        {:error, "Could not follow user: #{followed.nickname} blocked you."}
 
-      follower =
+      true ->
+        if !followed.local && follower.local && !ap_enabled?(followed) do
+          Websub.subscribe(follower, followed)
+        end
+
+        following =
+          [ap_followers | follower.following]
+          |> Enum.uniq()
+
+        follower =
+          follower
+          |> follow_changeset(%{following: following})
+          |> update_and_set_cache
+
+        {:ok, _} = update_follower_count(followed)
+
         follower
-        |> follow_changeset(%{following: following})
-        |> update_and_set_cache
-
-      {:ok, _} = update_follower_count(followed)
-
-      follower
     end
   end
 
