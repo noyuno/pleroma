@@ -35,7 +35,7 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPITest do
     {:ok, activity = %Activity{}} = TwitterAPI.create_status(user, input)
 
     expected_text =
-      "Hello again, <span><a class='mention' href='shp'>@<span>shp</span></a></span>.&lt;script&gt;&lt;/script&gt;<br>This is on another :moominmamma: line. <a href='http://localhost:4001/tag/2hu' rel='tag'>#2hu</a> <a href='http://localhost:4001/tag/epic' rel='tag'>#epic</a> <a href='http://localhost:4001/tag/phantasmagoric' rel='tag'>#phantasmagoric</a><br><a href=\"http://example.org/image.jpg\" class='attachment'>image.jpg</a>"
+      "Hello again, <span><a href='shp'>@<span>shp</span></a></span>.&lt;script&gt;&lt;/script&gt;<br>This is on another :moominmamma: line. <a href='http://localhost:4001/tag/2hu' rel='tag'>#2hu</a> <a href='http://localhost:4001/tag/epic' rel='tag'>#epic</a> <a href='http://localhost:4001/tag/phantasmagoric' rel='tag'>#phantasmagoric</a><br><a href=\"http://example.org/image.jpg\" class='attachment'>image.jpg</a>"
 
     assert get_in(activity.data, ["object", "content"]) == expected_text
     assert get_in(activity.data, ["object", "type"]) == "Note"
@@ -166,7 +166,7 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPITest do
   test "Unblock another user using user_id" do
     unblocked = insert(:user)
     user = insert(:user)
-    {:ok, user, _unblocked} = TwitterAPI.block(user, %{"user_id" => unblocked.id})
+    User.block(user, unblocked)
 
     {:ok, user, _unblocked} = TwitterAPI.unblock(user, %{"user_id" => unblocked.id})
     assert user.info["blocks"] == []
@@ -175,7 +175,7 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPITest do
   test "Unblock another user using screen_name" do
     unblocked = insert(:user)
     user = insert(:user)
-    {:ok, user, _unblocked} = TwitterAPI.block(user, %{"screen_name" => unblocked.nickname})
+    User.block(user, unblocked)
 
     {:ok, user, _unblocked} = TwitterAPI.unblock(user, %{"screen_name" => unblocked.nickname})
     assert user.info["blocks"] == []

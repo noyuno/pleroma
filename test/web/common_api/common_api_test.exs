@@ -1,4 +1,4 @@
-defmodule Pleroma.Web.CommonAPI.Test do
+defmodule Pleroma.Web.CommonAPI.UtilsTest do
   use Pleroma.DataCase
   alias Pleroma.Web.CommonAPI
 

@@ -26,7 +26,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "name" => user.name,
       "summary" => user.bio,
       "url" => user.ap_id,
-      "manuallyApprovesFollowers" => user.info["locked"] || false,
+      "manuallyApprovesFollowers" => false,
       "publicKey" => %{
         "id" => "#{user.ap_id}#main-key",
         "owner" => user.ap_id,

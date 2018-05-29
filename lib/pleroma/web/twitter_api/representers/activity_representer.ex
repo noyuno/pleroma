@@ -99,7 +99,7 @@ defmodule Pleroma.Web.TwitterAPI.Representers.ActivityRepresenter do
       ) do
     created_at = created_at |> Utils.date_to_asctime()
 
-    text = "#{user.nickname} undid the action at #{undid_activity["id"]}"
+    text = "#{user.nickname} undid the action at #{undid_activity}"
 
     %{
       "id" => activity.id,
