@@ -667,6 +667,7 @@ defmodule Pleroma.Web.TwitterAPI.ControllerTest do
 
       conn =
         conn
+        |> assign(:user, user)
         |> get("/api/statuses/friends", %{"user_id" => user.id})
 
       assert MapSet.equal?(
@@ -688,6 +689,7 @@ defmodule Pleroma.Web.TwitterAPI.ControllerTest do
 
       conn =
         conn
+        |> assign(:user, user)
         |> get("/api/statuses/friends", %{"screen_name" => user.nickname})
 
       assert MapSet.equal?(
