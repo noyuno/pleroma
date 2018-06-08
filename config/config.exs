@@ -55,7 +55,8 @@ config :pleroma, :instance,
   registrations_open: true,
   federating: true,
   rewrite_policy: Pleroma.Web.ActivityPub.MRF.NoOpPolicy,
-  public: true
+  public: true,
+  quarantined_instances: []
 
 config :pleroma, :mrf_simple,
   media_removal: [],
