@@ -491,6 +491,17 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  @quarantined_instances Keyword.get(@instance, :quarantined_instances, [])
+
+  def should_federate?(inbox, public) do
+    if public do
+      true
+    else
+      inbox_info = URI.parse(inbox)
+      inbox_info.host not in @quarantined_instances
+    end
+  end
+
   def publish(actor, activity) do
     followers =
       if actor.follower_address in activity.recipients do
@@ -500,6 +511,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         []
       end
 
+    public = is_public?(activity)
+
     remote_inboxes =
       (Pleroma.Web.Salmon.remote_users(activity) ++ followers)
       |> Enum.filter(fn user -> User.ap_enabled?(user) end)
@@ -507,6 +520,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         (data["endpoints"] && data["endpoints"]["sharedInbox"]) || data["inbox"]
       end)
       |> Enum.uniq()
+      |> Enum.filter(fn inbox -> should_federate?(inbox, public) end)
 
     {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
     json = Jason.encode!(data)
