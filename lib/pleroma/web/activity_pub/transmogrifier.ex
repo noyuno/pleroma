@@ -23,20 +23,26 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> fix_in_reply_to
     |> fix_emoji
     |> fix_tag
+    |> fix_content_map
   end
 
   def fix_in_reply_to(%{"inReplyTo" => in_reply_to_id} = object)
       when not is_nil(in_reply_to_id) do
     case ActivityPub.fetch_object_from_id(in_reply_to_id) do
       {:ok, replied_object} ->
-        activity = Activity.get_create_activity_by_object_ap_id(replied_object.data["id"])
-
-        object
-        |> Map.put("inReplyTo", replied_object.data["id"])
-        |> Map.put("inReplyToAtomUri", object["inReplyToAtomUri"] || in_reply_to_id)
-        |> Map.put("inReplyToStatusId", activity.id)
-        |> Map.put("conversation", replied_object.data["context"] || object["conversation"])
-        |> Map.put("context", replied_object.data["context"] || object["conversation"])
+        with %Activity{} = activity <-
+               Activity.get_create_activity_by_object_ap_id(replied_object.data["id"]) do
+          object
+          |> Map.put("inReplyTo", replied_object.data["id"])
+          |> Map.put("inReplyToAtomUri", object["inReplyToAtomUri"] || in_reply_to_id)
+          |> Map.put("inReplyToStatusId", activity.id)
+          |> Map.put("conversation", replied_object.data["context"] || object["conversation"])
+          |> Map.put("context", replied_object.data["context"] || object["conversation"])
+        else
+          e ->
+            Logger.error("Couldn't fetch #{object["inReplyTo"]} #{inspect(e)}")
+            object
+        end
 
       e ->
         Logger.error("Couldn't fetch #{object["inReplyTo"]} #{inspect(e)}")
@@ -100,6 +106,17 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     object
     |> Map.put("tag", combined)
   end
+
+  # content map usually only has one language so this will do for now.
+  def fix_content_map(%{"contentMap" => content_map} = object) do
+    content_groups = Map.to_list(content_map)
+    {_, content} = Enum.at(content_groups, 0)
+
+    object
+    |> Map.put("content", content)
+  end
+
+  def fix_content_map(object), do: object
 
   # TODO: validate those with a Ecto scheme
   # - tags
@@ -243,7 +260,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     with %User{} = actor <- User.get_or_fetch_by_ap_id(actor),
          {:ok, object} <-
            get_obj_helper(object_id) || ActivityPub.fetch_object_from_id(object_id),
-         {:ok, activity, _, _} <- ActivityPub.unannounce(actor, object, id, false) do
+         {:ok, activity, _} <- ActivityPub.unannounce(actor, object, id, false) do
       {:ok, activity}
     else
       _e -> :error

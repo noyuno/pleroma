@@ -58,6 +58,12 @@ config :pleroma, :instance,
   public: true,
   quarantined_instances: []
 
+config :pleroma, :activitypub, accept_blocks: true
+
+config :pleroma, :mrf_rejectnonpublic,
+  allow_followersonly: false,
+  allow_direct: false
+
 config :pleroma, :mrf_simple,
   media_removal: [],
   media_nsfw: [],

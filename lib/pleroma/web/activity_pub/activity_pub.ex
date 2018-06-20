@@ -63,6 +63,21 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         if activity.local do
           Pleroma.Web.Streamer.stream("public:local", activity)
         end
+
+        if activity.data["object"]["attachment"] != [] do
+          Pleroma.Web.Streamer.stream("public:media", activity)
+
+          if activity.local do
+            Pleroma.Web.Streamer.stream("public:local:media", activity)
+          end
+        end
+      else
+        if !Enum.member?(activity.data["cc"] || [], public) &&
+             !Enum.member?(
+               activity.data["to"],
+               User.get_by_ap_id(activity.data["actor"]).follower_address
+             ),
+           do: Pleroma.Web.Streamer.stream("direct", activity)
       end
     end
   end
@@ -179,7 +194,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
          :ok <- maybe_federate(unannounce_activity),
          {:ok, _activity} <- Repo.delete(announce_activity),
          {:ok, object} <- remove_announce_from_object(announce_activity, object) do
-      {:ok, unannounce_activity, announce_activity, object}
+      {:ok, unannounce_activity, object}
     else
       _e -> {:ok, object}
     end
@@ -362,6 +377,15 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_media(query, _), do: query
 
+  defp restrict_replies(query, %{"exclude_replies" => val}) when val == "true" or val == "1" do
+    from(
+      activity in query,
+      where: fragment("?->'object'->>'inReplyTo' is null", activity.data)
+    )
+  end
+
+  defp restrict_replies(query, _), do: query
+
   # Only search through last 100_000 activities by default
   defp restrict_recent(query, %{"whole_db" => true}), do: query
 
@@ -418,6 +442,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> restrict_recent(opts)
     |> restrict_blocked(opts)
     |> restrict_media(opts)
+<<<<<<< HEAD
+=======
+    |> restrict_visibility(opts)
+    |> restrict_replies(opts)
+>>>>>>> upstream/develop
   end
 
   def fetch_activities(recipients, opts \\ %{}) do

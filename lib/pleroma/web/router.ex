@@ -41,7 +41,7 @@ defmodule Pleroma.Web.Router do
   end
 
   pipeline :well_known do
-    plug(:accepts, ["xml", "xrd+xml", "json", "jrd+json"])
+    plug(:accepts, ["json", "jrd+json", "xml", "xrd+xml"])
   end
 
   pipeline :config do
@@ -241,6 +241,7 @@ defmodule Pleroma.Web.Router do
 
     post("/statuses/update", TwitterAPI.Controller, :status_update)
     post("/statuses/retweet/:id", TwitterAPI.Controller, :retweet)
+    post("/statuses/unretweet/:id", TwitterAPI.Controller, :unretweet)
     post("/statuses/destroy/:id", TwitterAPI.Controller, :delete_post)
 
     get("/pleroma/friend_requests", TwitterAPI.Controller, :friend_requests)
