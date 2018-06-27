@@ -238,6 +238,38 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  def block(blocker, blocked, activity_id \\ nil, local \\ true) do
+    ap_config = Application.get_env(:pleroma, :activitypub)
+    unfollow_blocked = Keyword.get(ap_config, :unfollow_blocked)
+    outgoing_blocks = Keyword.get(ap_config, :outgoing_blocks)
+
+    with true <- unfollow_blocked do
+      follow_activity = fetch_latest_follow(blocker, blocked)
+
+      if follow_activity do
+        unfollow(blocker, blocked, nil, local)
+      end
+    end
+
+    with true <- outgoing_blocks,
+         block_data <- make_block_data(blocker, blocked, activity_id),
+         {:ok, activity} <- insert(block_data, local),
+         :ok <- maybe_federate(activity) do
+      {:ok, activity}
+    else
+      _e -> {:ok, nil}
+    end
+  end
+
+  def unblock(blocker, blocked, activity_id \\ nil, local \\ true) do
+    with %Activity{} = block_activity <- fetch_latest_block(blocker, blocked),
+         unblock_data <- make_unblock_data(blocker, blocked, block_activity, activity_id),
+         {:ok, activity} <- insert(unblock_data, local),
+         :ok <- maybe_federate(activity) do
+      {:ok, activity}
+    end
+  end
+
   def fetch_activities_for_context(context, opts \\ %{}) do
     public = ["https://www.w3.org/ns/activitystreams#Public"]
 

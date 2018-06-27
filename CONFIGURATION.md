@@ -13,6 +13,23 @@ Instead, overload the settings by editing the following files:
 * `dev.secret.exs`: custom additional configuration for `MIX_ENV=dev`
 * `prod.secret.exs`: custom additional configuration for `MIX_ENV=prod`
 
+## Block functionality
+
+    config :pleroma, :activitypub,
+      accept_blocks: true,
+      unfollow_blocked: true,
+      outgoing_blocks: true
+
+    config :pleroma, :user, deny_follow_blocked: true
+
+* `accept_blocks`: whether to accept incoming block activities from
+   other instances
+* `unfollow_blocked`: whether blocks result in people getting
+   unfollowed
+* `outgoing_blocks`: whether to federate blocks to other instances
+* `deny_follow_blocked`: whether to disallow following an account that
+   has blocked the user in question
+
 ## Message Rewrite Filters (MRFs)
 
 Modify incoming and outgoing posts.
@@ -49,7 +66,8 @@ Restricts the visibility of posts from certain instances.
       media_removal: [],
       media_nsfw: [],
       federated_timeline_removal: [],
-      reject: []
+      reject: [],
+      accept: []
 
 * `media_removal`: posts from these instances will have attachments 
    removed
@@ -58,6 +76,7 @@ Restricts the visibility of posts from certain instances.
 * `federated_timeline_removal`: posts from these instances will be 
    marked as unlisted
 * `reject`: posts from these instances will be dropped
+* `accept`: if not empty, only posts from these instances will be accepted
 
 ### RejectNonPublic
 
