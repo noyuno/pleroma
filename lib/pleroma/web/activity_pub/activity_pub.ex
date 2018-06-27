@@ -474,11 +474,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> restrict_recent(opts)
     |> restrict_blocked(opts)
     |> restrict_media(opts)
-<<<<<<< HEAD
-=======
     |> restrict_visibility(opts)
     |> restrict_replies(opts)
->>>>>>> upstream/develop
   end
 
   def fetch_activities(recipients, opts \\ %{}) do
