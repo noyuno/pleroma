@@ -67,7 +67,8 @@ defmodule Pleroma.User do
     %{
       following_count: length(user.following) - oneself,
       note_count: user.info["note_count"] || 0,
-      follower_count: user.info["follower_count"] || 0
+      follower_count: user.info["follower_count"] || 0,
+      locked: user.info["locked"] || false
     }
   end
 
@@ -226,18 +227,18 @@ defmodule Pleroma.User do
           Websub.subscribe(follower, followed)
         end
 
-      following =
-        [ap_followers | follower.following]
-        |> Enum.uniq()
+        following =
+          [ap_followers | follower.following]
+          |> Enum.uniq()
 
-      follower =
+        follower =
+          follower
+          |> follow_changeset(%{following: following})
+          |> update_and_set_cache
+
+        {:ok, _} = update_follower_count(followed)
+
         follower
-        |> follow_changeset(%{following: following})
-        |> update_and_set_cache
-
-      {:ok, _} = update_follower_count(followed)
-
-      follower
     end
   end
 

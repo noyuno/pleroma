@@ -178,8 +178,8 @@ defmodule Pleroma.Web.Streamer do
     end)
   end
 
-  defp internal_topic("user", socket) do
-    "user:#{socket.assigns[:user].id}"
+  defp internal_topic(topic, socket) when topic in ~w[user direct] do
+    "#{topic}:#{socket.assigns[:user].id}"
   end
 
   defp internal_topic(topic, _), do: topic

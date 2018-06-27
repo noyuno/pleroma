@@ -20,7 +20,7 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPI do
 
   def follow(%User{} = follower, params) do
     with {:ok, %User{} = followed} <- get_user(params),
-         {:ok, follower} <- User.follow(follower, followed),
+         {:ok, follower} <- User.maybe_direct_follow(follower, followed),
          {:ok, activity} <- ActivityPub.follow(follower, followed) do
       {:ok, follower, followed, activity}
     else
@@ -31,14 +31,7 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPI do
   def unfollow(%User{} = follower, params) do
     with {:ok, %User{} = unfollowed} <- get_user(params),
          {:ok, follower, follow_activity} <- User.unfollow(follower, unfollowed),
-         {:ok, _activity} <-
-           ActivityPub.insert(%{
-             "type" => "Undo",
-             "actor" => follower.ap_id,
-             # get latest Follow for these users
-             "object" => follow_activity.data["id"],
-             "published" => make_date()
-           }) do
+         {:ok, _activity} <- ActivityPub.unfollow(follower, unfollowed) do
       {:ok, follower, unfollowed}
     else
       err -> err
@@ -47,7 +40,8 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPI do
 
   def block(%User{} = blocker, params) do
     with {:ok, %User{} = blocked} <- get_user(params),
-         {:ok, blocker} <- User.block(blocker, blocked) do
+         {:ok, blocker} <- User.block(blocker, blocked),
+         {:ok, _activity} <- ActivityPub.block(blocker, blocked) do
       {:ok, blocker, blocked}
     else
       err -> err
@@ -56,7 +50,8 @@ defmodule Pleroma.Web.TwitterAPI.TwitterAPI do
 
   def unblock(%User{} = blocker, params) do
     with {:ok, %User{} = blocked} <- get_user(params),
-         {:ok, blocker} <- User.unblock(blocker, blocked) do
+         {:ok, blocker} <- User.unblock(blocker, blocked),
+         {:ok, _activity} <- ActivityPub.unblock(blocker, blocked) do
       {:ok, blocker, blocked}
     else
       err -> err

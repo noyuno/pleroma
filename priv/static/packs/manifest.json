@@ -62,8 +62,6 @@
   "features/list_editor.js.map": "/packs/features/list_editor.js.map",
   "features/list_timeline.js": "/packs/features/list_timeline.js",
   "features/list_timeline.js.map": "/packs/features/list_timeline.js.map",
-  "features/lists.js": "/packs/features/lists.js",
-  "features/lists.js.map": "/packs/features/lists.js.map",
   "features/notifications.js": "/packs/features/notifications.js",
   "features/notifications.js.map": "/packs/features/notifications.js.map",
   "features/public_timeline.js": "/packs/features/public_timeline.js",
