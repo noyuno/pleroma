@@ -128,7 +128,7 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   Inserts a full object if it is contained in an activity.
   """
   def insert_full_object(%{"object" => %{"type" => type} = object_data})
-      when is_map(object_data) and type in ["Article", "Note"] do
+      when is_map(object_data) and type in ["Article", "Note", "Video"] do
     with {:ok, _} <- Object.create(object_data) do
       :ok
     end
@@ -204,13 +204,17 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   end
 
   def add_like_to_object(%Activity{data: %{"actor" => actor}}, object) do
-    with likes <- [actor | object.data["likes"] || []] |> Enum.uniq() do
+    likes = if is_list(object.data["likes"]), do: object.data["likes"], else: []
+
+    with likes <- [actor | likes] |> Enum.uniq() do
       update_likes_in_object(likes, object)
     end
   end
 
   def remove_like_from_object(%Activity{data: %{"actor" => actor}}, object) do
-    with likes <- (object.data["likes"] || []) |> List.delete(actor) do
+    likes = if is_list(object.data["likes"]), do: object.data["likes"], else: []
+
+    with likes <- likes |> List.delete(actor) do
       update_likes_in_object(likes, object)
     end
   end
@@ -302,6 +306,24 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   @doc """
   Make announce activity data for the given actor and object
   """
+  # for relayed messages, we only want to send to subscribers
+  def make_announce_data(
+        %User{ap_id: ap_id, nickname: nil} = user,
+        %Object{data: %{"id" => id}} = object,
+        activity_id
+      ) do
+    data = %{
+      "type" => "Announce",
+      "actor" => ap_id,
+      "object" => id,
+      "to" => [user.follower_address],
+      "cc" => [],
+      "context" => object.data["context"]
+    }
+
+    if activity_id, do: Map.put(data, "id", activity_id), else: data
+  end
+
   def make_announce_data(
         %User{ap_id: ap_id} = user,
         %Object{data: %{"id" => id}} = object,
@@ -356,14 +378,27 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     if activity_id, do: Map.put(data, "id", activity_id), else: data
   end
 
-  def add_announce_to_object(%Activity{data: %{"actor" => actor}}, object) do
-    with announcements <- [actor | object.data["announcements"] || []] |> Enum.uniq() do
+  def add_announce_to_object(
+        %Activity{
+          data: %{"actor" => actor, "cc" => ["https://www.w3.org/ns/activitystreams#Public"]}
+        },
+        object
+      ) do
+    announcements =
+      if is_list(object.data["announcements"]), do: object.data["announcements"], else: []
+
+    with announcements <- [actor | announcements] |> Enum.uniq() do
       update_element_in_object("announcement", announcements, object)
     end
   end
 
+  def add_announce_to_object(_, object), do: {:ok, object}
+
   def remove_announce_from_object(%Activity{data: %{"actor" => actor}}, object) do
-    with announcements <- (object.data["announcements"] || []) |> List.delete(actor) do
+    announcements =
+      if is_list(object.data["announcements"]), do: object.data["announcements"], else: []
+
+    with announcements <- announcements |> List.delete(actor) do
       update_element_in_object("announcement", announcements, object)
     end
   end

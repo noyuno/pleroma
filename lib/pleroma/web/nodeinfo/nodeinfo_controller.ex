@@ -3,6 +3,7 @@ defmodule Pleroma.Web.Nodeinfo.NodeinfoController do
 
   alias Pleroma.Stats
   alias Pleroma.Web
+  alias Pleroma.{User, Repo}
 
   def schemas(conn, _params) do
     response = %{
@@ -21,7 +22,15 @@ defmodule Pleroma.Web.Nodeinfo.NodeinfoController do
   def nodeinfo(conn, %{"version" => "2.0"}) do
     instance = Application.get_env(:pleroma, :instance)
     media_proxy = Application.get_env(:pleroma, :media_proxy)
+    suggestions = Application.get_env(:pleroma, :suggestions)
+    chat = Application.get_env(:pleroma, :chat)
+    gopher = Application.get_env(:pleroma, :gopher)
     stats = Stats.get_stats()
+
+    staff_accounts =
+      User.moderator_user_query()
+      |> Repo.all()
+      |> Enum.map(fn u -> u.ap_id end)
 
     response = %{
       version: "2.0",
@@ -45,7 +54,17 @@ defmodule Pleroma.Web.Nodeinfo.NodeinfoController do
         nodeName: Keyword.get(instance, :name),
         nodeDescription: Keyword.get(instance, :description),
         mediaProxy: Keyword.get(media_proxy, :enabled),
-        private: !Keyword.get(instance, :public, true)
+        private: !Keyword.get(instance, :public, true),
+        suggestions: %{
+          enabled: Keyword.get(suggestions, :enabled, false),
+          thirdPartyEngine: Keyword.get(suggestions, :third_party_engine, ""),
+          timeout: Keyword.get(suggestions, :timeout, 5000),
+          limit: Keyword.get(suggestions, :limit, 23),
+          web: Keyword.get(suggestions, :web, "")
+        },
+        staffAccounts: staff_accounts,
+        chat: Keyword.get(chat, :enabled),
+        gopher: Keyword.get(gopher, :enabled)
       }
     }
 

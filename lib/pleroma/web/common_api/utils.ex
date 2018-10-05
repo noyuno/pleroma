@@ -1,6 +1,7 @@
 defmodule Pleroma.Web.CommonAPI.Utils do
   alias Pleroma.{Repo, Object, Formatter, Activity}
   alias Pleroma.Web.ActivityPub.Utils
+  alias Pleroma.Web.Endpoint
   alias Pleroma.User
   alias Calendar.Strftime
   alias Comeonin.Pbkdf2
@@ -64,7 +65,6 @@ defmodule Pleroma.Web.CommonAPI.Utils do
 
   def make_content_html(status, mentions, attachments, tags, no_attachment_links \\ false) do
     status
-    |> String.replace("\r", "")
     |> format_input(mentions, tags)
     |> maybe_add_attachments(attachments, no_attachment_links)
   end
@@ -95,7 +95,7 @@ defmodule Pleroma.Web.CommonAPI.Utils do
   def format_input(text, mentions, tags) do
     text
     |> Formatter.html_escape()
-    |> String.replace("\n", "<br>")
+    |> String.replace(~r/\r?\n/, "<br>")
     |> (&{[], &1}).()
     |> Formatter.add_links()
     |> Formatter.add_user_links(mentions)
@@ -109,7 +109,7 @@ defmodule Pleroma.Web.CommonAPI.Utils do
       |> Enum.sort_by(fn {tag, _} -> -String.length(tag) end)
 
     Enum.reduce(tags, text, fn {full, tag}, text ->
-      url = "#<a href='#{Pleroma.Web.base_url()}/tag/#{tag}' rel='tag'>#{tag}</a>"
+      url = "<a href='#{Pleroma.Web.base_url()}/tag/#{tag}' rel='tag'>##{tag}</a>"
       String.replace(text, full, url)
     end)
   end
@@ -195,5 +195,16 @@ defmodule Pleroma.Web.CommonAPI.Utils do
     else
       _ -> {:error, "Invalid password."}
     end
+  end
+
+  def emoji_from_profile(%{info: info} = user) do
+    (Formatter.get_emoji(user.bio) ++ Formatter.get_emoji(user.name))
+    |> Enum.map(fn {shortcode, url} ->
+      %{
+        "type" => "Emoji",
+        "icon" => %{"type" => "Image", "url" => "#{Endpoint.url()}#{url}"},
+        "name" => ":#{shortcode}:"
+      }
+    end)
   end
 end

@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "theme": "bird",
   "logo": "/instance/thumbnail.jpeg",
   "redirectRootNoLogin": "/main/all",
@@ -10,5 +11,7 @@
   "whoToFollowLink": "https://vinayaka.distsn.org/?{{host}}+{{user}}",
   "whoToFollowLinkDummy2": "https://followlink.osa-p.net/recommend.html",
   "showInstanceSpecificPanel": true,
-  "scopeOptionsEnabled": true
+  "scopeOptionsEnabled": true,
+  "formattingOptionsEnabled": true,
+  "collapseMessageWithSubject": true
 }

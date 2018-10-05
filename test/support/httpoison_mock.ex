@@ -3,6 +3,22 @@ defmodule HTTPoisonMock do
 
   def get(url, body \\ [], headers \\ [])
 
+  def get("https://info.pleroma.site/activity.json", _, _) do
+    {:ok,
+     %Response{
+       status_code: 200,
+       body: File.read!("test/fixtures/httpoison_mock/https__info.pleroma.site_activity.json")
+     }}
+  end
+
+  def get("https://puckipedia.com/", [Accept: "application/activity+json"], _) do
+    {:ok,
+     %Response{
+       status_code: 200,
+       body: File.read!("test/fixtures/httpoison_mock/puckipedia.com.json")
+     }}
+  end
+
   def get(
         "https://gerzilla.de/.well-known/webfinger?resource=acct:kaniini@gerzilla.de",
         [Accept: "application/xrd+xml,application/jrd+json"],
@@ -388,6 +404,17 @@ defmodule HTTPoisonMock do
      }}
   end
 
+  def get("http://mastodon.example.org/users/admin/statuses/100787282858396771", _, _) do
+    {:ok,
+     %Response{
+       status_code: 200,
+       body:
+         File.read!(
+           "test/fixtures/httpoison_mock/http___mastodon.example.org_users_admin_status_1234.json"
+         )
+     }}
+  end
+
   def get(
         "https://pawoo.net/.well-known/webfinger",
         [Accept: "application/xrd+xml,application/jrd+json"],
@@ -749,6 +776,22 @@ defmodule HTTPoisonMock do
      %Response{
        status_code: 200,
        body: File.read!("test/fixtures/httpoison_mock/baptiste.gelex.xyz-user.json")
+     }}
+  end
+
+  def get("https://peertube.moe/videos/watch/df5f464b-be8d-46fb-ad81-2d4c2d1630e3", _, _) do
+    {:ok,
+     %Response{
+       status_code: 200,
+       body: File.read!("test/fixtures/httpoison_mock/peertube.moe-vid.json")
+     }}
+  end
+
+  def get("https://peertube.moe/accounts/7even", _, _) do
+    {:ok,
+     %Response{
+       status_code: 200,
+       body: File.read!("test/fixtures/httpoison_mock/7even.json")
      }}
   end
 

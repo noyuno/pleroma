@@ -7,6 +7,7 @@ defmodule Pleroma.Web.TwitterAPI.Representers.ActivityRepresenter do
   alias Pleroma.Web.TwitterAPI.{TwitterAPI, UserView, ActivityView}
   alias Pleroma.Web.CommonAPI.Utils
   alias Pleroma.Formatter
+  alias Pleroma.HTML
 
   defp user_by_ap_id(user_list, ap_id) do
     Enum.find(user_list, fn %{ap_id: user_id} -> ap_id == user_id end)
@@ -167,21 +168,30 @@ defmodule Pleroma.Web.TwitterAPI.Representers.ActivityRepresenter do
     {summary, content} = ActivityView.render_content(object)
 
     html =
-      HtmlSanitizeEx.basic_html(content)
+      HTML.filter_tags(content, User.html_filter_policy(opts[:for]))
       |> Formatter.emojify(object["emoji"])
+
+    video =
+      if object["type"] == "Video" do
+        vid = [object]
+      else
+        []
+      end
+
+    attachments = (object["attachment"] || []) ++ video
 
     %{
       "id" => activity.id,
       "uri" => activity.data["object"]["id"],
       "user" => UserView.render("show.json", %{user: user, for: opts[:for]}),
       "statusnet_html" => html,
-      "text" => HtmlSanitizeEx.strip_tags(content),
+      "text" => HTML.strip_tags(content),
       "is_local" => activity.local,
       "is_post_verb" => true,
       "created_at" => created_at,
       "in_reply_to_status_id" => object["inReplyToStatusId"],
       "statusnet_conversation_id" => conversation_id,
-      "attachments" => (object["attachment"] || []) |> ObjectRepresenter.enum_to_list(opts),
+      "attachments" => attachments |> ObjectRepresenter.enum_to_list(opts),
       "attentions" => attentions,
       "fave_num" => like_count,
       "repeat_num" => announcement_count,

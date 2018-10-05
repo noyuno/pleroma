@@ -5,6 +5,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   alias Pleroma.Web.CommonAPI.Utils
   alias Pleroma.Web.MediaProxy
   alias Pleroma.Repo
+  alias Pleroma.HTML
 
   # TODO: Add cached version.
   defp get_replied_to_activities(activities) do
@@ -62,6 +63,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       content: reblogged[:content],
       created_at: created_at,
       reblogs_count: 0,
+      replies_count: 0,
       favourites_count: 0,
       reblogged: false,
       favourited: false,
@@ -99,8 +101,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     repeated = opts[:for] && opts[:for].ap_id in (object["announcements"] || [])
     favorited = opts[:for] && opts[:for].ap_id in (object["likes"] || [])
 
-    attachments =
-      render_many(object["attachment"] || [], StatusView, "attachment.json", as: :attachment)
+    attachment_data = object["attachment"] || []
+    attachment_data = attachment_data ++ if object["type"] == "Video", do: [object], else: []
+    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
 
     created_at = Utils.to_masto_date(object["published"])
 
@@ -110,14 +113,18 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     emojis =
       (activity.data["object"]["emoji"] || [])
       |> Enum.map(fn {name, url} ->
-        name = HtmlSanitizeEx.strip_tags(name)
+        name = HTML.strip_tags(name)
 
         url =
-          HtmlSanitizeEx.strip_tags(url)
+          HTML.strip_tags(url)
           |> MediaProxy.url()
 
-        %{shortcode: name, url: url, static_url: url}
+        %{shortcode: name, url: url, static_url: url, visible_in_picker: false}
       end)
+
+    content =
+      render_content(object)
+      |> HTML.filter_tags(User.html_filter_policy(opts[:for]))
 
     %{
       id: to_string(activity.id),
@@ -127,9 +134,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       in_reply_to_id: reply_to && to_string(reply_to.id),
       in_reply_to_account_id: reply_to_user && to_string(reply_to_user.id),
       reblog: nil,
-      content: render_content(object),
+      content: content,
       created_at: created_at,
       reblogs_count: announcement_count,
+      replies_count: 0,
       favourites_count: like_count,
       reblogged: !!repeated,
       favourited: !!favorited,
@@ -151,7 +159,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   end
 
   def render("attachment.json", %{attachment: attachment}) do
-    [%{"mediaType" => media_type, "href" => href} | _] = attachment["url"]
+    [attachment_url | _] = attachment["url"]
+    media_type = attachment_url["mediaType"] || attachment_url["mimeType"] || "image"
+    href = attachment_url["href"]
 
     type =
       cond do
@@ -208,6 +218,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     end
   end
 
+  def render_content(%{"type" => "Video"} = object) do
+    name = object["name"]
+
+    content =
+      if !!name and name != "" do
+        "<p><a href=\"#{object["id"]}\">#{name}</a></p>#{object["content"]}"
+      else
+        object["content"]
+      end
+
+    content
+  end
+
   def render_content(%{"type" => "Article"} = object) do
     summary = object["name"]
 
@@ -218,10 +241,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         object["content"]
       end
 
-    HtmlSanitizeEx.basic_html(content)
+    content
   end
 
-  def render_content(object) do
-    HtmlSanitizeEx.basic_html(object["content"])
-  end
+  def render_content(object), do: object["content"]
 end

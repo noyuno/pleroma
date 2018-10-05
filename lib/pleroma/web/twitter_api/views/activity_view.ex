@@ -11,6 +11,7 @@ defmodule Pleroma.Web.TwitterAPI.ActivityView do
   alias Pleroma.User
   alias Pleroma.Repo
   alias Pleroma.Formatter
+  alias Pleroma.HTML
 
   import Ecto.Query
 
@@ -181,6 +182,7 @@ defmodule Pleroma.Web.TwitterAPI.ActivityView do
   def render("activity.json", %{activity: %{data: %{"type" => "Like"}} = activity} = opts) do
     user = get_user(activity.data["actor"], opts)
     liked_activity = Activity.get_create_activity_by_object_ap_id(activity.data["object"])
+    liked_activity_id = if liked_activity, do: liked_activity.id, else: nil
 
     created_at =
       activity.data["published"]
@@ -197,7 +199,7 @@ defmodule Pleroma.Web.TwitterAPI.ActivityView do
       "is_post_verb" => false,
       "uri" => "tag:#{activity.data["id"]}:objectType=Favourite",
       "created_at" => created_at,
-      "in_reply_to_status_id" => liked_activity.id,
+      "in_reply_to_status_id" => liked_activity_id,
       "external_url" => activity.data["id"],
       "activity_type" => "like"
     }
@@ -231,7 +233,7 @@ defmodule Pleroma.Web.TwitterAPI.ActivityView do
     {summary, content} = render_content(object)
 
     html =
-      HtmlSanitizeEx.basic_html(content)
+      HTML.filter_tags(content, User.html_filter_policy(opts[:for]))
       |> Formatter.emojify(object["emoji"])
 
     %{
@@ -239,7 +241,7 @@ defmodule Pleroma.Web.TwitterAPI.ActivityView do
       "uri" => activity.data["object"]["id"],
       "user" => UserView.render("show.json", %{user: user, for: opts[:for]}),
       "statusnet_html" => html,
-      "text" => HtmlSanitizeEx.strip_tags(content),
+      "text" => HTML.strip_tags(content),
       "is_local" => activity.local,
       "is_post_verb" => true,
       "created_at" => created_at,

@@ -20,6 +20,30 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
     assert represented["profile_image_url"] == image
   end
 
+  test "A user with emoji in username", %{user: user} do
+    expected =
+      "<img height=\"32px\" width=\"32px\" alt=\"karjalanpiirakka\" title=\"karjalanpiirakka\" src=\"/file.png\" /> man"
+
+    user = %{
+      user
+      | info: %{
+          "source_data" => %{
+            "tag" => [
+              %{
+                "type" => "Emoji",
+                "icon" => %{"url" => "/file.png"},
+                "name" => ":karjalanpiirakka:"
+              }
+            ]
+          }
+        }
+    }
+
+    user = %{user | name: ":karjalanpiirakka: man"}
+    represented = UserView.render("show.json", %{user: user})
+    assert represented["name_html"] == expected
+  end
+
   test "A user" do
     note_activity = insert(:note_activity)
     user = User.get_cached_by_ap_id(note_activity.data["actor"])
@@ -40,7 +64,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "id" => user.id,
       "name" => user.name,
       "screen_name" => user.nickname,
-      "description" => HtmlSanitizeEx.strip_tags(user.bio),
+      "name_html" => user.name,
+      "description" => HtmlSanitizeEx.strip_tags(user.bio |> String.replace("<br>", "\n")),
+      "description_html" => HtmlSanitizeEx.basic_html(user.bio),
       "created_at" => user.inserted_at |> Utils.format_naive_asctime(),
       "favourites_count" => 0,
       "statuses_count" => 1,
@@ -61,7 +87,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "background_image" => nil,
       "is_local" => true,
       "locked" => false,
-      "default_scope" => "public"
+      "default_scope" => "public",
+      "no_rich_text" => false,
+      "fields" => []
     }
 
     assert represented == UserView.render("show.json", %{user: user})
@@ -77,7 +105,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "id" => user.id,
       "name" => user.name,
       "screen_name" => user.nickname,
-      "description" => HtmlSanitizeEx.strip_tags(user.bio),
+      "name_html" => user.name,
+      "description" => HtmlSanitizeEx.strip_tags(user.bio |> String.replace("<br>", "\n")),
+      "description_html" => HtmlSanitizeEx.basic_html(user.bio),
       "created_at" => user.inserted_at |> Utils.format_naive_asctime(),
       "favourites_count" => 0,
       "statuses_count" => 0,
@@ -98,7 +128,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "background_image" => nil,
       "is_local" => true,
       "locked" => false,
-      "default_scope" => "public"
+      "default_scope" => "public",
+      "no_rich_text" => false,
+      "fields" => []
     }
 
     assert represented == UserView.render("show.json", %{user: user, for: follower})
@@ -115,7 +147,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "id" => follower.id,
       "name" => follower.name,
       "screen_name" => follower.nickname,
-      "description" => HtmlSanitizeEx.strip_tags(follower.bio),
+      "name_html" => follower.name,
+      "description" => HtmlSanitizeEx.strip_tags(follower.bio |> String.replace("<br>", "\n")),
+      "description_html" => HtmlSanitizeEx.basic_html(follower.bio),
       "created_at" => follower.inserted_at |> Utils.format_naive_asctime(),
       "favourites_count" => 0,
       "statuses_count" => 0,
@@ -136,7 +170,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "background_image" => nil,
       "is_local" => true,
       "locked" => false,
-      "default_scope" => "public"
+      "default_scope" => "public",
+      "no_rich_text" => false,
+      "fields" => []
     }
 
     assert represented == UserView.render("show.json", %{user: follower, for: user})
@@ -160,7 +196,9 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "id" => user.id,
       "name" => user.name,
       "screen_name" => user.nickname,
-      "description" => HtmlSanitizeEx.strip_tags(user.bio),
+      "name_html" => user.name,
+      "description" => HtmlSanitizeEx.strip_tags(user.bio |> String.replace("<br>", "\n")),
+      "description_html" => HtmlSanitizeEx.basic_html(user.bio),
       "created_at" => user.inserted_at |> Utils.format_naive_asctime(),
       "favourites_count" => 0,
       "statuses_count" => 0,
@@ -181,10 +219,38 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "background_image" => nil,
       "is_local" => true,
       "locked" => false,
-      "default_scope" => "public"
+      "default_scope" => "public",
+      "no_rich_text" => false,
+      "fields" => []
     }
 
     blocker = Repo.get(User, blocker.id)
     assert represented == UserView.render("show.json", %{user: user, for: blocker})
+  end
+
+  test "a user with mastodon fields" do
+    fields = [
+      %{
+        "name" => "Pronouns",
+        "value" => "she/her"
+      },
+      %{
+        "name" => "Website",
+        "value" => "https://example.org/"
+      }
+    ]
+
+    user =
+      insert(:user, %{
+        info: %{
+          "source_data" => %{
+            "attachment" =>
+              Enum.map(fields, fn field -> Map.put(field, "type", "PropertyValue") end)
+          }
+        }
+      })
+
+    userview = UserView.render("show.json", %{user: user})
+    assert userview["fields"] == fields
   end
 end

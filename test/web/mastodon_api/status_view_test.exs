@@ -28,6 +28,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
       content: HtmlSanitizeEx.basic_html(note.data["object"]["content"]),
       created_at: created_at,
       reblogs_count: 0,
+      replies_count: 0,
       favourites_count: 0,
       reblogged: false,
       favourited: false,
@@ -47,7 +48,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         %{
           shortcode: "2hu",
           url: "corndog.png",
-          static_url: "corndog.png"
+          static_url: "corndog.png",
+          visible_in_picker: false
         }
       ]
     }

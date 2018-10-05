@@ -22,6 +22,7 @@ defmodule Pleroma.User do
     field(:info, :map, default: %{})
     field(:follower_address, :string)
     field(:search_distance, :float, virtual: true)
+    field(:last_refreshed_at, :naive_datetime)
     has_many(:notifications, Notification)
 
     timestamps()
@@ -68,7 +69,8 @@ defmodule Pleroma.User do
       following_count: length(user.following) - oneself,
       note_count: user.info["note_count"] || 0,
       follower_count: user.info["follower_count"] || 0,
-      locked: user.info["locked"] || false
+      locked: user.info["locked"] || false,
+      default_scope: user.info["default_scope"] || "public"
     }
   end
 
@@ -77,7 +79,7 @@ defmodule Pleroma.User do
     changes =
       %User{}
       |> cast(params, [:bio, :name, :ap_id, :nickname, :info, :avatar])
-      |> validate_required([:name, :ap_id, :nickname])
+      |> validate_required([:name, :ap_id])
       |> unique_constraint(:nickname)
       |> validate_format(:nickname, @email_regex)
       |> validate_length(:bio, max: 5000)
@@ -111,8 +113,12 @@ defmodule Pleroma.User do
   end
 
   def upgrade_changeset(struct, params \\ %{}) do
+    params =
+      params
+      |> Map.put(:last_refreshed_at, NaiveDateTime.utc_now())
+
     struct
-    |> cast(params, [:bio, :name, :info, :follower_address, :avatar])
+    |> cast(params, [:bio, :name, :info, :follower_address, :avatar, :last_refreshed_at])
     |> unique_constraint(:nickname)
     |> validate_format(:nickname, ~r/^[a-zA-Z\d]+$/)
     |> validate_length(:bio, max: 5000)
@@ -167,6 +173,16 @@ defmodule Pleroma.User do
       changeset
     end
   end
+
+  def needs_update?(%User{local: true}), do: false
+
+  def needs_update?(%User{local: false, last_refreshed_at: nil}), do: true
+
+  def needs_update?(%User{local: false} = user) do
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), user.last_refreshed_at) >= 86400
+  end
+
+  def needs_update?(_), do: true
 
   def maybe_direct_follow(%User{} = follower, %User{info: info} = followed) do
     user_config = Application.get_env(:pleroma, :user)
@@ -398,6 +414,7 @@ defmodule Pleroma.User do
       Enum.map(reqs, fn req -> req.actor end)
       |> Enum.uniq()
       |> Enum.map(fn ap_id -> get_by_ap_id(ap_id) end)
+      |> Enum.filter(fn u -> !following?(u, user) end)
 
     {:ok, users}
   end
@@ -456,13 +473,34 @@ defmodule Pleroma.User do
     update_and_set_cache(cs)
   end
 
+  def get_notified_from_activity_query(to) do
+    from(
+      u in User,
+      where: u.ap_id in ^to,
+      where: u.local == true
+    )
+  end
+
+  def get_notified_from_activity(%Activity{recipients: to, data: %{"type" => "Announce"} = data}) do
+    object = Object.normalize(data["object"])
+    actor = User.get_cached_by_ap_id(data["actor"])
+
+    # ensure that the actor who published the announced object appears only once
+    to =
+      if actor.nickname != nil do
+        to ++ [object.data["actor"]]
+      else
+        to
+      end
+      |> Enum.uniq()
+
+    query = get_notified_from_activity_query(to)
+
+    Repo.all(query)
+  end
+
   def get_notified_from_activity(%Activity{recipients: to}) do
-    query =
-      from(
-        u in User,
-        where: u.ap_id in ^to,
-        where: u.local == true
-      )
+    query = get_notified_from_activity_query(to)
 
     Repo.all(query)
   end
@@ -499,7 +537,8 @@ defmodule Pleroma.User do
               u.nickname,
               u.name
             )
-        }
+        },
+        where: not is_nil(u.nickname)
       )
 
     q =
@@ -578,7 +617,19 @@ defmodule Pleroma.User do
   end
 
   def local_user_query() do
-    from(u in User, where: u.local == true)
+    from(
+      u in User,
+      where: u.local == true,
+      where: not is_nil(u.nickname)
+    )
+  end
+
+  def moderator_user_query() do
+    from(
+      u in User,
+      where: u.local == true,
+      where: fragment("?->'is_moderator' @> 'true'", u.info)
+    )
   end
 
   def deactivate(%User{} = user) do
@@ -618,8 +669,16 @@ defmodule Pleroma.User do
     :ok
   end
 
+  def html_filter_policy(%User{info: %{"no_rich_text" => true}}) do
+    Pleroma.HTML.Scrubber.TwitterText
+  end
+
+  def html_filter_policy(_), do: nil
+
   def get_or_fetch_by_ap_id(ap_id) do
-    if user = get_by_ap_id(ap_id) do
+    user = get_by_ap_id(ap_id)
+
+    if !is_nil(user) and !User.needs_update?(user) do
       user
     else
       ap_try = ActivityPub.make_user_from_ap_id(ap_id)
@@ -634,6 +693,25 @@ defmodule Pleroma.User do
             _ -> {:error, "Could not fetch by AP id"}
           end
       end
+    end
+  end
+
+  def get_or_create_instance_user do
+    relay_uri = "#{Pleroma.Web.Endpoint.url()}/relay"
+
+    if user = get_by_ap_id(relay_uri) do
+      user
+    else
+      changes =
+        %User{}
+        |> cast(%{}, [:ap_id, :nickname, :local])
+        |> put_change(:ap_id, relay_uri)
+        |> put_change(:nickname, nil)
+        |> put_change(:local, true)
+        |> put_change(:follower_address, relay_uri <> "/followers")
+
+      {:ok, user} = Repo.insert(changes)
+      user
     end
   end
 
