@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "theme": "bird",
   "logo": "/instance/thumbnail.jpeg",
   "redirectRootNoLogin": "/main/all",
@@ -13,5 +12,8 @@
   "showInstanceSpecificPanel": true,
   "scopeOptionsEnabled": true,
   "formattingOptionsEnabled": true,
-  "collapseMessageWithSubject": true
+  "collapseMessageWithSubject": true, 
+  "collapseMessageWithSubject": true,
+  "hidePostStats": false,
+  "hideUserStats": false
 }

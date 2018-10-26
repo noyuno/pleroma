@@ -94,9 +94,15 @@ defmodule Pleroma.Formatter do
     "woollysocks"
   ]
 
-  @finmoji_with_filenames Enum.map(@finmoji, fn finmoji ->
-                            {finmoji, "/finmoji/128px/#{finmoji}-128.png"}
-                          end)
+  @instance Application.get_env(:pleroma, :instance)
+
+  @finmoji_with_filenames (if Keyword.get(@instance, :finmoji_enabled) do
+                             Enum.map(@finmoji, fn finmoji ->
+                               {finmoji, "/finmoji/128px/#{finmoji}-128.png"}
+                             end)
+                           else
+                             []
+                           end)
 
   @emoji_from_file (with {:ok, default} <- File.read("config/emoji.txt") do
                       custom =
@@ -171,25 +177,8 @@ defmodule Pleroma.Formatter do
 
   @link_regex ~r/[0-9a-z+\-\.]+:[0-9a-z$-_.+!*'(),]+/ui
 
-  # IANA got a list https://www.iana.org/assignments/uri-schemes/ but
-  # Stuff like ipfs isn’t in it
-  # There is very niche stuff
-  @uri_schemes [
-    "https://",
-    "http://",
-    "dat://",
-    "dweb://",
-    "gopher://",
-    "ipfs://",
-    "ipns://",
-    "irc:",
-    "ircs:",
-    "magnet:",
-    "mailto:",
-    "mumble:",
-    "ssb://",
-    "xmpp:"
-  ]
+  @uri_schemes Application.get_env(:pleroma, :uri_schemes, [])
+  @valid_schemes Keyword.get(@uri_schemes, :valid_schemes, [])
 
   # TODO: make it use something other than @link_regex
   def html_escape(text, "text/html") do
@@ -207,14 +196,10 @@ defmodule Pleroma.Formatter do
 
   @doc "changes scheme:... urls to html links"
   def add_links({subs, text}) do
-    additionnal_schemes =
-      Application.get_env(:pleroma, :uri_schemes, [])
-      |> Keyword.get(:additionnal_schemes, [])
-
     links =
       text
       |> String.split([" ", "\t", "<br>"])
-      |> Enum.filter(fn word -> String.starts_with?(word, @uri_schemes ++ additionnal_schemes) end)
+      |> Enum.filter(fn word -> String.starts_with?(word, @valid_schemes) end)
       |> Enum.filter(fn word -> Regex.match?(@link_regex, word) end)
       |> Enum.map(fn url -> {Ecto.UUID.generate(), url} end)
       |> Enum.sort_by(fn {_, url} -> -String.length(url) end)

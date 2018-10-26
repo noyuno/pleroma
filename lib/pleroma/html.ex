@@ -36,10 +36,12 @@ defmodule Pleroma.HTML.Scrubber.TwitterText do
   paragraphs, breaks and links are allowed through the filter.
   """
 
+  @markup Application.get_env(:pleroma, :markup)
+  @uri_schemes Application.get_env(:pleroma, :uri_schemes, [])
+  @valid_schemes Keyword.get(@uri_schemes, :valid_schemes, [])
+
   require HtmlSanitizeEx.Scrubber.Meta
   alias HtmlSanitizeEx.Scrubber.Meta
-
-  @valid_schemes ["http", "https"]
 
   Meta.remove_cdata_sections_before_scrub()
   Meta.strip_comments()
@@ -56,11 +58,11 @@ defmodule Pleroma.HTML.Scrubber.TwitterText do
   Meta.allow_tag_with_these_attributes("span", [])
 
   # allow inline images for custom emoji
-  @markup Application.get_env(:pleroma, :markup)
   @allow_inline_images Keyword.get(@markup, :allow_inline_images)
 
   if @allow_inline_images do
-    Meta.allow_tag_with_uri_attributes("img", ["src"], @valid_schemes)
+    # restrict img tags to http/https only, because of MediaProxy.
+    Meta.allow_tag_with_uri_attributes("img", ["src"], ["http", "https"])
 
     Meta.allow_tag_with_these_attributes("img", [
       "width",
@@ -79,7 +81,9 @@ defmodule Pleroma.HTML.Scrubber.Default do
   require HtmlSanitizeEx.Scrubber.Meta
   alias HtmlSanitizeEx.Scrubber.Meta
 
-  @valid_schemes ["http", "https"]
+  @markup Application.get_env(:pleroma, :markup)
+  @uri_schemes Application.get_env(:pleroma, :uri_schemes, [])
+  @valid_schemes Keyword.get(@uri_schemes, :valid_schemes, [])
 
   Meta.remove_cdata_sections_before_scrub()
   Meta.strip_comments()
@@ -103,11 +107,11 @@ defmodule Pleroma.HTML.Scrubber.Default do
   Meta.allow_tag_with_these_attributes("u", [])
   Meta.allow_tag_with_these_attributes("ul", [])
 
-  @markup Application.get_env(:pleroma, :markup)
   @allow_inline_images Keyword.get(@markup, :allow_inline_images)
 
   if @allow_inline_images do
-    Meta.allow_tag_with_uri_attributes("img", ["src"], @valid_schemes)
+    # restrict img tags to http/https only, because of MediaProxy.
+    Meta.allow_tag_with_uri_attributes("img", ["src"], ["http", "https"])
 
     Meta.allow_tag_with_these_attributes("img", [
       "width",
@@ -172,6 +176,8 @@ defmodule Pleroma.HTML.Transform.MediaProxy do
 
     {"img", attributes, children}
   end
+
+  def scrub({:comment, children}), do: ""
 
   def scrub({tag, attributes, children}), do: {tag, attributes, children}
   def scrub({tag, children}), do: children
