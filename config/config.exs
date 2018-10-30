@@ -20,7 +20,8 @@ config :pleroma, Pleroma.Uploaders.Local,
 
 config :pleroma, Pleroma.Uploaders.S3,
   bucket: nil,
-  public_endpoint: "https://s3.amazonaws.com"
+  public_endpoint: "https://s3.amazonaws.com",
+  force_media_proxy: false
 
 config :pleroma, :emoji, shortcode_globs: ["/emoji/custom/**/*.png"]
 
@@ -85,6 +86,9 @@ config :pleroma, :instance,
   limit: 5000,
   char_limit: 5000,
   upload_limit: 16_000_000,
+  avatar_upload_limit: 2_000_000,
+  background_upload_limit: 4_000_000,
+  banner_upload_limit: 4_000_000,
   registrations_open: true,
   federating: true,
   allow_relay: true,

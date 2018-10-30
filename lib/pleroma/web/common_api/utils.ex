@@ -2,6 +2,7 @@ defmodule Pleroma.Web.CommonAPI.Utils do
   alias Pleroma.{Repo, Object, Formatter, Activity}
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.Endpoint
+  alias Pleroma.Web.MediaProxy
   alias Pleroma.User
   alias Calendar.Strftime
   alias Comeonin.Pbkdf2
@@ -88,8 +89,9 @@ defmodule Pleroma.Web.CommonAPI.Utils do
   def add_attachments(text, attachments) do
     attachment_text =
       Enum.map(attachments, fn
-        %{"url" => [%{"href" => href} | _]} ->
-          name = URI.decode(Path.basename(href))
+        %{"url" => [%{"href" => href} | _]} = attachment ->
+          name = attachment["name"] || URI.decode(Path.basename(href))
+          href = MediaProxy.url(href)
           "<a href=\"#{href}\" class='attachment'>#{shortname(name)}</a>"
 
         _ ->
