@@ -78,7 +78,6 @@ config :tesla, adapter: Tesla.Adapter.Hackney
 config :pleroma, :http, proxy_url: nil
 
 config :pleroma, :instance,
-  version: version,
   name: "s.noyuno.space",
   email: "noyuno@users.noreply.github.com",
   description: "Pleromaインスタンス，代替フェディバースサーバ",
