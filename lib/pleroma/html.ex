@@ -1,14 +1,12 @@
 defmodule Pleroma.HTML do
   alias HtmlSanitizeEx.Scrubber
 
-  @markup Application.get_env(:pleroma, :markup)
-
   defp get_scrubbers(scrubber) when is_atom(scrubber), do: [scrubber]
   defp get_scrubbers(scrubbers) when is_list(scrubbers), do: scrubbers
   defp get_scrubbers(_), do: [Pleroma.HTML.Scrubber.Default]
 
   def get_scrubbers() do
-    Keyword.get(@markup, :scrub_policy)
+    Pleroma.Config.get([:markup, :scrub_policy])
     |> get_scrubbers
   end
 
@@ -47,7 +45,7 @@ defmodule Pleroma.HTML.Scrubber.TwitterText do
   Meta.strip_comments()
 
   # links
-  Meta.allow_tag_with_uri_attributes("a", ["href"], @valid_schemes)
+  Meta.allow_tag_with_uri_attributes("a", ["href", "data-user", "data-tag"], @valid_schemes)
   Meta.allow_tag_with_these_attributes("a", ["name", "title"])
 
   # paragraphs and linebreaks
@@ -88,8 +86,10 @@ defmodule Pleroma.HTML.Scrubber.Default do
   Meta.remove_cdata_sections_before_scrub()
   Meta.strip_comments()
 
-  Meta.allow_tag_with_uri_attributes("a", ["href"], @valid_schemes)
+  Meta.allow_tag_with_uri_attributes("a", ["href", "data-user", "data-tag"], @valid_schemes)
   Meta.allow_tag_with_these_attributes("a", ["name", "title"])
+
+  Meta.allow_tag_with_these_attributes("abbr", ["title"])
 
   Meta.allow_tag_with_these_attributes("b", [])
   Meta.allow_tag_with_these_attributes("blockquote", [])

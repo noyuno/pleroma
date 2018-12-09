@@ -3,6 +3,7 @@
   "logo": "/instance/thumbnail.jpeg",
   "redirectRootNoLogin": "/main/all",
   "redirectRootLogin": "/main/friends",
+<<<<<<< HEAD
   "chatDisabled": true,
   "showWhoToFollowPanel": true,
   "whoToFollowProvider": "https://vinayaka.distsn.org/cgi-bin/vinayaka-user-match-osa-api.cgi?{{host}}+{{user}}",
@@ -14,6 +15,16 @@
   "formattingOptionsEnabled": true,
   "collapseMessageWithSubject": true, 
   "collapseMessageWithSubject": true,
+=======
+  "chatDisabled": false,
+  "showInstanceSpecificPanel": false,
+  "scopeOptionsEnabled": false,
+  "formattingOptionsEnabled": false,
+  "collapseMessageWithSubject": false,
+  "scopeCopy": false,
+  "subjectLineBehavior": "email",
+>>>>>>> upstream/develop
   "hidePostStats": false,
-  "hideUserStats": false
+  "hideUserStats": false,
+  "loginMethod": "password"
 }

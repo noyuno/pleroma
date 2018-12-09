@@ -1,32 +1,33 @@
 defmodule Pleroma.Gopher.Server do
   use GenServer
   require Logger
-  @gopher Application.get_env(:pleroma, :gopher)
 
   def start_link() do
-    ip = Keyword.get(@gopher, :ip, {0, 0, 0, 0})
-    port = Keyword.get(@gopher, :port, 1234)
-    GenServer.start_link(__MODULE__, [ip, port], [])
+    config = Pleroma.Config.get(:gopher, [])
+    ip = Keyword.get(config, :ip, {0, 0, 0, 0})
+    port = Keyword.get(config, :port, 1234)
+
+    if Keyword.get(config, :enabled, false) do
+      GenServer.start_link(__MODULE__, [ip, port], [])
+    else
+      Logger.info("Gopher server disabled")
+      :ignore
+    end
   end
 
   def init([ip, port]) do
-    if Keyword.get(@gopher, :enabled, false) do
-      Logger.info("Starting gopher server on #{port}")
+    Logger.info("Starting gopher server on #{port}")
 
-      :ranch.start_listener(
-        :gopher,
-        100,
-        :ranch_tcp,
-        [port: port],
-        __MODULE__.ProtocolHandler,
-        []
-      )
+    :ranch.start_listener(
+      :gopher,
+      100,
+      :ranch_tcp,
+      [ip: ip, port: port],
+      __MODULE__.ProtocolHandler,
+      []
+    )
 
-      {:ok, %{ip: ip, port: port}}
-    else
-      Logger.info("Gopher server disabled")
-      {:ok, nil}
-    end
+    {:ok, %{ip: ip, port: port}}
   end
 end
 
@@ -36,9 +37,6 @@ defmodule Pleroma.Gopher.Server.ProtocolHandler do
   alias Pleroma.Activity
   alias Pleroma.Repo
   alias Pleroma.HTML
-
-  @instance Application.get_env(:pleroma, :instance)
-  @gopher Application.get_env(:pleroma, :gopher)
 
   def start_link(ref, socket, transport, opts) do
     pid = spawn_link(__MODULE__, :init, [ref, socket, transport, opts])
@@ -62,7 +60,7 @@ defmodule Pleroma.Gopher.Server.ProtocolHandler do
 
   def link(name, selector, type \\ 1) do
     address = Pleroma.Web.Endpoint.host()
-    port = Keyword.get(@gopher, :port, 1234)
+    port = Pleroma.Config.get([:gopher, :port], 1234)
     "#{type}#{name}\t#{selector}\t#{address}\t#{port}\r\n"
   end
 
@@ -85,7 +83,7 @@ defmodule Pleroma.Gopher.Server.ProtocolHandler do
   end
 
   def response("") do
-    info("Welcome to #{Keyword.get(@instance, :name, "Pleroma")}!") <>
+    info("Welcome to #{Pleroma.Config.get([:instance, :name], "Pleroma")}!") <>
       link("Public Timeline", "/main/public") <>
       link("Federated Timeline", "/main/all") <> ".\r\n"
   end

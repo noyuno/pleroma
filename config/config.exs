@@ -10,18 +10,22 @@ config :pleroma, ecto_repos: [Pleroma.Repo]
 
 config :pleroma, Pleroma.Repo, types: Pleroma.PostgresTypes
 
+# Upload configuration
 config :pleroma, Pleroma.Upload,
   uploader: Pleroma.Uploaders.Local,
-  strip_exif: false
+  filters: [],
+  proxy_remote: false,
+  proxy_opts: []
 
-config :pleroma, Pleroma.Uploaders.Local,
-  uploads: "uploads",
-  uploads_url: "{{base_url}}/media/{{file}}"
+config :pleroma, Pleroma.Uploaders.Local, uploads: "uploads"
 
 config :pleroma, Pleroma.Uploaders.S3,
   bucket: nil,
-  public_endpoint: "https://s3.amazonaws.com",
-  force_media_proxy: false
+  public_endpoint: "https://s3.amazonaws.com"
+
+config :pleroma, Pleroma.Uploaders.MDII,
+  cgi: "https://mdii.sakura.ne.jp/mdii-post.cgi",
+  files: "https://mdii.sakura.ne.jp"
 
 config :pleroma, :emoji, shortcode_globs: ["/emoji/custom/**/*.png"]
 
@@ -48,6 +52,7 @@ config :pleroma, Pleroma.Web.Endpoint,
   url: [host: "localhost"],
   protocol: "https",
   secret_key_base: "aK4Abxf29xU9TTDKre9coZPUgevcVCFQJe/5xP/7Lt4BEif6idBIbjupVbOrbKxl",
+  signing_salt: "CqaoopA2",
   render_errors: [view: Pleroma.Web.ErrorView, accepts: ~w(json)],
   pubsub: [name: Pleroma.PubSub, adapter: Phoenix.PubSub.PG2],
   secure_cookie_flag: true
@@ -67,13 +72,7 @@ config :mime, :types, %{
 config :pleroma, :websub, Pleroma.Web.Websub
 config :pleroma, :ostatus, Pleroma.Web.OStatus
 config :pleroma, :httpoison, Pleroma.HTTP
-
-version =
-  with {version, 0} <- System.cmd("git", ["rev-parse", "HEAD"]) do
-    "Pleroma #{Mix.Project.config()[:version]} #{String.trim(version)}"
-  else
-    _ -> "Pleroma #{Mix.Project.config()[:version]} dev"
-  end
+config :tesla, adapter: Tesla.Adapter.Hackney
 
 # Configures http settings, upstream proxy etc.
 config :pleroma, :http, proxy_url: nil
@@ -154,9 +153,11 @@ config :pleroma, :mrf_simple,
 
 config :pleroma, :media_proxy,
   enabled: false,
-  redirect_on_failure: true
-
-# base_url: "https://cache.pleroma.social"
+  # base_url: "https://cache.pleroma.social",
+  proxy_opts: [
+    # inline_content_types: [] | false | true,
+    # http: [:insecure]
+  ]
 
 config :pleroma, :chat, enabled: false
 
@@ -176,6 +177,27 @@ config :pleroma, :suggestions,
   timeout: 300_000,
   limit: 23,
   web: "https://vinayaka.distsn.org/?{{host}}+{{user}}"
+
+config :pleroma, :http_security,
+  enabled: true,
+  sts: false,
+  sts_max_age: 31_536_000,
+  ct_max_age: 2_592_000,
+  referrer_policy: "same-origin"
+
+config :cors_plug,
+  max_age: 86_400,
+  methods: ["POST", "PUT", "DELETE", "GET", "PATCH", "OPTIONS"],
+  expose: [
+    "Link",
+    "X-RateLimit-Reset",
+    "X-RateLimit-Limit",
+    "X-RateLimit-Remaining",
+    "X-Request-Id",
+    "Idempotency-Key"
+  ],
+  credentials: true,
+  headers: ["Authorization", "Content-Type", "Idempotency-Key"]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

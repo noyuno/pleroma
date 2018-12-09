@@ -10,8 +10,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   @httpoison Application.get_env(:pleroma, :httpoison)
 
-  @instance Application.get_env(:pleroma, :instance)
-
   # For Announce activities, we filter the recipients based on following status for any actors
   # that match actual users.  See issue #164 for more information about why this is necessary.
   defp get_recipients(%{"type" => "Announce"} = data) do
@@ -44,7 +42,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp check_actor_is_active(actor) do
     if not is_nil(actor) do
       with user <- User.get_cached_by_ap_id(actor),
-           nil <- user.info["deactivated"] do
+           false <- user.info.deactivated do
         :ok
       else
         _e -> :reject
@@ -273,8 +271,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       "to" => [user.follower_address, "https://www.w3.org/ns/activitystreams#Public"]
     }
 
-    with Repo.delete(object),
-         Repo.delete_all(Activity.all_non_create_by_object_ap_id_q(id)),
+    with {:ok, _} <- Object.delete(object),
          {:ok, activity} <- insert(data, local),
          :ok <- maybe_federate(activity),
          {:ok, _actor} <- User.decrease_note_count(user) do
@@ -512,8 +509,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   defp restrict_blocked(query, %{"blocking_user" => %User{info: info}}) do
-    blocks = info["blocks"] || []
-    domain_blocks = info["domain_blocks"] || []
+    blocks = info.blocks || []
+    domain_blocks = info.domain_blocks || []
 
     from(
       activity in query,
@@ -575,11 +572,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> Enum.reverse()
   end
 
-  def upload(file, size_limit \\ nil) do
-    with data <-
-           Upload.store(file, Application.get_env(:pleroma, :instance)[:dedupe_media], size_limit),
-         false <- is_nil(data) do
-      Repo.insert(%Object{data: data})
+  def upload(file, opts \\ []) do
+    with {:ok, data} <- Upload.store(file, opts) do
+      obj_data =
+        if opts[:actor] do
+          Map.put(data, "actor", opts[:actor])
+        else
+          data
+        end
+
+      Repo.insert(%Object{data: obj_data})
     end
   end
 
@@ -631,9 +633,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   def fetch_and_prepare_user_from_ap_id(ap_id) do
-    with {:ok, %{status_code: 200, body: body}} <-
-           @httpoison.get(ap_id, [Accept: "application/activity+json"], follow_redirect: true),
-         {:ok, data} <- Jason.decode(body) do
+    with {:ok, data} <- fetch_and_contain_remote_object_from_id(ap_id) do
       user_data_from_user_object(data)
     else
       e -> Logger.error("Could not decode user at fetch #{ap_id}, #{inspect(e)}")
@@ -660,14 +660,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
-  @quarantined_instances Keyword.get(@instance, :quarantined_instances, [])
-
   def should_federate?(inbox, public) do
     if public do
       true
     else
       inbox_info = URI.parse(inbox)
-      inbox_info.host not in @quarantined_instances
+      !Enum.member?(Pleroma.Config.get([:instance, :quarantined_instances], []), inbox_info.host)
     end
   end
 
@@ -685,7 +683,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     remote_inboxes =
       (Pleroma.Web.Salmon.remote_users(activity) ++ followers)
       |> Enum.filter(fn user -> User.ap_enabled?(user) end)
-      |> Enum.map(fn %{info: %{"source_data" => data}} ->
+      |> Enum.map(fn %{info: %{source_data: data}} ->
         (is_map(data["endpoints"]) && Map.get(data["endpoints"], "sharedInbox")) || data["inbox"]
       end)
       |> Enum.uniq()
@@ -737,22 +735,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     else
       Logger.info("Fetching #{id} via AP")
 
-      with true <- String.starts_with?(id, "http"),
-           {:ok, %{body: body, status_code: code}} when code in 200..299 <-
-             @httpoison.get(
-               id,
-               [Accept: "application/activity+json"],
-               follow_redirect: true,
-               timeout: 10000,
-               recv_timeout: 20000
-             ),
-           {:ok, data} <- Jason.decode(body),
+      with {:ok, data} <- fetch_and_contain_remote_object_from_id(id),
            nil <- Object.normalize(data),
            params <- %{
              "type" => "Create",
              "to" => data["to"],
              "cc" => data["cc"],
-             "actor" => data["attributedTo"],
+             "actor" => data["actor"] || data["attributedTo"],
              "object" => data
            },
            :ok <- Transmogrifier.contain_origin(id, params),
@@ -773,6 +762,24 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
             e -> e
           end
       end
+    end
+  end
+
+  def fetch_and_contain_remote_object_from_id(id) do
+    Logger.info("Fetching #{id} via AP")
+
+    with true <- String.starts_with?(id, "http"),
+         {:ok, %{body: body, status: code}} when code in 200..299 <-
+           @httpoison.get(
+             id,
+             [{:Accept, "application/activity+json"}]
+           ),
+         {:ok, data} <- Jason.decode(body),
+         :ok <- Transmogrifier.contain_origin_from_id(id, data) do
+      {:ok, data}
+    else
+      e ->
+        {:error, e}
     end
   end
 

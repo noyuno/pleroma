@@ -1,6 +1,6 @@
 defmodule Pleroma.Object do
   use Ecto.Schema
-  alias Pleroma.{Repo, Object}
+  alias Pleroma.{Repo, Object, User, Activity}
   import Ecto.{Query, Changeset}
 
   schema "objects" do
@@ -31,13 +31,22 @@ defmodule Pleroma.Object do
   def normalize(ap_id) when is_binary(ap_id), do: Object.get_by_ap_id(ap_id)
   def normalize(_), do: nil
 
-  def get_cached_by_ap_id(ap_id) do
-    if Mix.env() == :test do
+  # Owned objects can only be mutated by their owner
+  def authorize_mutation(%Object{data: %{"actor" => actor}}, %User{ap_id: ap_id}),
+    do: actor == ap_id
+
+  # Legacy objects can be mutated by anybody
+  def authorize_mutation(%Object{}, %User{}), do: true
+
+  if Mix.env() == :test do
+    def get_cached_by_ap_id(ap_id) do
       get_by_ap_id(ap_id)
-    else
+    end
+  else
+    def get_cached_by_ap_id(ap_id) do
       key = "object:#{ap_id}"
 
-      Cachex.fetch!(:user_cache, key, fn _ ->
+      Cachex.fetch!(:object_cache, key, fn _ ->
         object = get_by_ap_id(ap_id)
 
         if object do
@@ -51,5 +60,13 @@ defmodule Pleroma.Object do
 
   def context_mapping(context) do
     Object.change(%Object{}, %{data: %{"id" => context}})
+  end
+
+  def delete(%Object{data: %{"id" => id}} = object) do
+    with Repo.delete(object),
+         Repo.delete_all(Activity.all_non_create_by_object_ap_id_q(id)),
+         {:ok, true} <- Cachex.del(:object_cache, "object:#{id}") do
+      {:ok, object}
+    end
   end
 end

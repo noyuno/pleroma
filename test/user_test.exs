@@ -9,6 +9,11 @@ defmodule Pleroma.UserTest do
   import Pleroma.Factory
   import Ecto.Query
 
+  setup_all do
+    Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+    :ok
+  end
+
   test "ap_id returns the activity pub id for the user" do
     user = UserBuilder.build()
 
@@ -34,14 +39,14 @@ defmodule Pleroma.UserTest do
     user = Repo.get(User, user.id)
 
     followed = User.get_by_ap_id(followed.ap_id)
-    assert followed.info["follower_count"] == 1
+    assert followed.info.follower_count == 1
 
     assert User.ap_followers(followed) in user.following
   end
 
   test "can't follow a deactivated users" do
     user = insert(:user)
-    followed = insert(:user, info: %{"deactivated" => true})
+    followed = insert(:user, info: %{deactivated: true})
 
     {:error, _} = User.follow(user, followed)
   end
@@ -56,8 +61,8 @@ defmodule Pleroma.UserTest do
   end
 
   test "local users do not automatically follow local locked accounts" do
-    follower = insert(:user, info: %{"locked" => true})
-    followed = insert(:user, info: %{"locked" => true})
+    follower = insert(:user, info: %{locked: true})
+    followed = insert(:user, info: %{locked: true})
 
     {:ok, follower} = User.maybe_direct_follow(follower, followed)
 
@@ -144,6 +149,18 @@ defmodule Pleroma.UserTest do
 
       assert changeset.changes.follower_address == "#{changeset.changes.ap_id}/followers"
     end
+
+    test "it ensures info is not nil" do
+      changeset = User.register_changeset(%User{}, @full_user_data)
+
+      assert changeset.valid?
+
+      {:ok, user} =
+        changeset
+        |> Repo.insert()
+
+      refute is_nil(user.info)
+    end
   end
 
   describe "fetching a user from nickname or trying to build one" do
@@ -185,12 +202,14 @@ defmodule Pleroma.UserTest do
           local: false,
           nickname: "admin@mastodon.example.org",
           ap_id: "http://mastodon.example.org/users/admin",
-          last_refreshed_at: a_week_ago
+          last_refreshed_at: a_week_ago,
+          info: %{}
         )
 
       assert orig_user.last_refreshed_at == a_week_ago
 
       user = User.get_or_fetch_by_ap_id("http://mastodon.example.org/users/admin")
+      assert user.info.source_data["endpoints"]
 
       refute user.last_refreshed_at == orig_user.last_refreshed_at
     end
@@ -311,45 +330,45 @@ defmodule Pleroma.UserTest do
 
       user = User.get_by_ap_id(note.data["actor"])
 
-      assert user.info["note_count"] == nil
+      assert user.info.note_count == 0
 
       {:ok, user} = User.update_note_count(user)
 
-      assert user.info["note_count"] == 1
+      assert user.info.note_count == 1
     end
 
     test "it increases the info->note_count property" do
       note = insert(:note)
       user = User.get_by_ap_id(note.data["actor"])
 
-      assert user.info["note_count"] == nil
+      assert user.info.note_count == 0
 
       {:ok, user} = User.increase_note_count(user)
 
-      assert user.info["note_count"] == 1
+      assert user.info.note_count == 1
 
       {:ok, user} = User.increase_note_count(user)
 
-      assert user.info["note_count"] == 2
+      assert user.info.note_count == 2
     end
 
     test "it decreases the info->note_count property" do
       note = insert(:note)
       user = User.get_by_ap_id(note.data["actor"])
 
-      assert user.info["note_count"] == nil
+      assert user.info.note_count == 0
 
       {:ok, user} = User.increase_note_count(user)
 
-      assert user.info["note_count"] == 1
+      assert user.info.note_count == 1
 
       {:ok, user} = User.decrease_note_count(user)
 
-      assert user.info["note_count"] == 0
+      assert user.info.note_count == 0
 
       {:ok, user} = User.decrease_note_count(user)
 
-      assert user.info["note_count"] == 0
+      assert user.info.note_count == 0
     end
 
     test "it sets the info->follower_count property" do
@@ -358,11 +377,11 @@ defmodule Pleroma.UserTest do
 
       User.follow(follower, user)
 
-      assert user.info["follower_count"] == nil
+      assert user.info.follower_count == 0
 
       {:ok, user} = User.update_follower_count(user)
 
-      assert user.info["follower_count"] == 1
+      assert user.info.follower_count == 1
     end
   end
 
@@ -487,11 +506,13 @@ defmodule Pleroma.UserTest do
     assert addressed in recipients
   end
 
-  test ".deactivate deactivates a user" do
+  test ".deactivate can de-activate then re-activate a user" do
     user = insert(:user)
-    assert false == !!user.info["deactivated"]
+    assert false == user.info.deactivated
     {:ok, user} = User.deactivate(user)
-    assert true == user.info["deactivated"]
+    assert true == user.info.deactivated
+    {:ok, user} = User.deactivate(user, false)
+    assert false == user.info.deactivated
   end
 
   test ".delete deactivates a user, all follow relationships and all create activities" do
@@ -509,13 +530,13 @@ defmodule Pleroma.UserTest do
     {:ok, _, _} = CommonAPI.favorite(activity.id, follower)
     {:ok, _, _} = CommonAPI.repeat(activity.id, follower)
 
-    :ok = User.delete(user)
+    {:ok, _} = User.delete(user)
 
     followed = Repo.get(User, followed.id)
     follower = Repo.get(User, follower.id)
     user = Repo.get(User, user.id)
 
-    assert user.info["deactivated"]
+    assert user.info.deactivated
 
     refute User.following?(user, followed)
     refute User.following?(followed, follower)
@@ -544,9 +565,48 @@ defmodule Pleroma.UserTest do
     end
 
     test "html_filter_policy returns TwitterText scrubber when rich-text is disabled" do
-      user = insert(:user, %{info: %{"no_rich_text" => true}})
+      user = insert(:user, %{info: %{no_rich_text: true}})
 
       assert Pleroma.HTML.Scrubber.TwitterText == User.html_filter_policy(user)
+    end
+  end
+
+  describe "caching" do
+    test "invalidate_cache works" do
+      user = insert(:user)
+      user_info = User.get_cached_user_info(user)
+
+      User.invalidate_cache(user)
+
+      {:ok, nil} = Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
+      {:ok, nil} = Cachex.get(:user_cache, "nickname:#{user.nickname}")
+      {:ok, nil} = Cachex.get(:user_cache, "user_info:#{user.id}")
+    end
+
+    test "User.delete() plugs any possible zombie objects" do
+      user = insert(:user)
+
+      {:ok, _} = User.delete(user)
+
+      {:ok, cached_user} = Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
+
+      assert cached_user != user
+
+      {:ok, cached_user} = Cachex.get(:user_cache, "nickname:#{user.ap_id}")
+
+      assert cached_user != user
+    end
+  end
+
+  describe "User.search" do
+    test "finds a user, ranking by similarity" do
+      user = insert(:user, %{name: "lain"})
+      user_two = insert(:user, %{name: "ean"})
+      user_three = insert(:user, %{name: "ebn", nickname: "lain@mastodon.social"})
+      user_four = insert(:user, %{nickname: "lain@pleroma.soykaf.com"})
+
+      assert user_four ==
+               User.search("lain@ple") |> List.first() |> Map.put(:search_distance, nil)
     end
   end
 end

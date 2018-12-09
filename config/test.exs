@@ -9,7 +9,7 @@ config :pleroma, Pleroma.Web.Endpoint,
 # Print only warnings and errors during test
 config :logger, level: :warn
 
-config :pleroma, Pleroma.Upload, uploads: "test/uploads"
+config :pleroma, Pleroma.Uploaders.Local, uploads: "test/uploads"
 
 # Configure your database
 config :pleroma, Pleroma.Repo,
@@ -25,7 +25,13 @@ config :pbkdf2_elixir, rounds: 1
 
 config :pleroma, :websub, Pleroma.Web.WebsubMock
 config :pleroma, :ostatus, Pleroma.Web.OStatusMock
-config :pleroma, :httpoison, HTTPoisonMock
+config :tesla, adapter: Tesla.Mock
+
+config :web_push_encryption, :vapid_details,
+  subject: "mailto:administrator@example.com",
+  public_key:
+    "BLH1qVhJItRGCfxgTtONfsOKDc9VRAraXw-3NsmjMngWSh7NxOizN6bkuRA7iLTMPS82PjwJAr3UoK9EC1IFrz4",
+  private_key: "_-XZ0iebPrRfZ_o0-IatTdszYa8VCH1yLN-JauK7HHA"
 
 try do
   import_config "test.secret.exs"

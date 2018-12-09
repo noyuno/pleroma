@@ -11,6 +11,21 @@ defmodule Pleroma.Web.OStatus do
   alias Pleroma.Web.OStatus.{FollowHandler, UnfollowHandler, NoteHandler, DeleteHandler}
   alias Pleroma.Web.ActivityPub.Transmogrifier
 
+  def is_representable?(%Activity{data: data}) do
+    object = Object.normalize(data["object"])
+
+    cond do
+      is_nil(object) ->
+        false
+
+      object.data["type"] == "Note" ->
+        true
+
+      true ->
+        false
+    end
+  end
+
   def feed_path(user) do
     "#{user.ap_id}/feed.atom"
   end
@@ -211,25 +226,21 @@ defmodule Pleroma.Web.OStatus do
     old_data = %{
       avatar: user.avatar,
       bio: user.bio,
-      name: user.name,
-      info: user.info
+      name: user.name
     }
 
     with false <- user.local,
          avatar <- make_avatar_object(doc),
          bio <- string_from_xpath("//author[1]/summary", doc),
          name <- string_from_xpath("//author[1]/poco:displayName", doc),
-         info <-
-           Map.put(user.info, "banner", make_avatar_object(doc, "header") || user.info["banner"]),
          new_data <- %{
            avatar: avatar || old_data.avatar,
            name: name || old_data.name,
-           bio: bio || old_data.bio,
-           info: info || old_data.info
+           bio: bio || old_data.bio
          },
          false <- new_data == old_data do
       change = Ecto.Changeset.change(user, new_data)
-      Repo.update(change)
+      User.update_and_set_cache(change)
     else
       _ ->
         {:ok, user}
@@ -335,13 +346,10 @@ defmodule Pleroma.Web.OStatus do
 
   def fetch_activity_from_atom_url(url) do
     with true <- String.starts_with?(url, "http"),
-         {:ok, %{body: body, status_code: code}} when code in 200..299 <-
+         {:ok, %{body: body, status: code}} when code in 200..299 <-
            @httpoison.get(
              url,
-             [Accept: "application/atom+xml"],
-             follow_redirect: true,
-             timeout: 10000,
-             recv_timeout: 20000
+             [{:Accept, "application/atom+xml"}]
            ) do
       Logger.debug("Got document from #{url}, handling...")
       handle_incoming(body)
@@ -356,8 +364,7 @@ defmodule Pleroma.Web.OStatus do
     Logger.debug("Trying to fetch #{url}")
 
     with true <- String.starts_with?(url, "http"),
-         {:ok, %{body: body}} <-
-           @httpoison.get(url, [], follow_redirect: true, timeout: 10000, recv_timeout: 20000),
+         {:ok, %{body: body}} <- @httpoison.get(url, []),
          {:ok, atom_url} <- get_atom_url(body) do
       fetch_activity_from_atom_url(atom_url)
     else

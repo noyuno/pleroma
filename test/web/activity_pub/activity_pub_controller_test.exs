@@ -5,6 +5,33 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.{Repo, User}
   alias Pleroma.Activity
 
+  setup_all do
+    Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+    :ok
+  end
+
+  describe "/relay" do
+    test "with the relay active, it returns the relay user", %{conn: conn} do
+      res =
+        conn
+        |> get(activity_pub_path(conn, :relay))
+        |> json_response(200)
+
+      assert res["id"] =~ "/relay"
+    end
+
+    test "with the relay disabled, it returns 404", %{conn: conn} do
+      Pleroma.Config.put([:instance, :allow_relay], false)
+
+      res =
+        conn
+        |> get(activity_pub_path(conn, :relay))
+        |> json_response(404)
+
+      Pleroma.Config.put([:instance, :allow_relay], true)
+    end
+  end
+
   describe "/users/:nickname" do
     test "it returns a json representation of the user", %{conn: conn} do
       user = insert(:user)
@@ -123,6 +150,20 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert result["first"]["orderedItems"] == [user.ap_id]
     end
 
+    test "it returns returns empty if the user has 'hide_network' set", %{conn: conn} do
+      user = insert(:user)
+      user_two = insert(:user, %{info: %{hide_network: true}})
+      User.follow(user, user_two)
+
+      result =
+        conn
+        |> get("/users/#{user_two.nickname}/followers")
+        |> json_response(200)
+
+      assert result["first"]["orderedItems"] == []
+      assert result["totalItems"] == 1
+    end
+
     test "it works for more than 10 users", %{conn: conn} do
       user = insert(:user)
 
@@ -162,6 +203,20 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         |> json_response(200)
 
       assert result["first"]["orderedItems"] == [user_two.ap_id]
+    end
+
+    test "it returns returns empty if the user has 'hide_network' set", %{conn: conn} do
+      user = insert(:user, %{info: %{hide_network: true}})
+      user_two = insert(:user)
+      User.follow(user, user_two)
+
+      result =
+        conn
+        |> get("/users/#{user.nickname}/following")
+        |> json_response(200)
+
+      assert result["first"]["orderedItems"] == []
+      assert result["totalItems"] == 1
     end
 
     test "it works for more than 10 users", %{conn: conn} do

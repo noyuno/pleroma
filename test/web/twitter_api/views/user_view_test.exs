@@ -13,6 +13,13 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
     [user: user]
   end
 
+  test "A user with only a nickname", %{user: user} do
+    user = %{user | name: nil, nickname: "scarlett@catgirl.science"}
+    represented = UserView.render("show.json", %{user: user})
+    assert represented["name"] == user.nickname
+    assert represented["name_html"] == user.nickname
+  end
+
   test "A user with an avatar object", %{user: user} do
     image = "image"
     user = %{user | avatar: %{"url" => [%{"href" => image}]}}
@@ -24,10 +31,10 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
     expected =
       "<img height=\"32px\" width=\"32px\" alt=\"karjalanpiirakka\" title=\"karjalanpiirakka\" src=\"/file.png\" /> man"
 
-    user = %{
-      user
-      | info: %{
-          "source_data" => %{
+    user =
+      insert(:user, %{
+        info: %{
+          source_data: %{
             "tag" => [
               %{
                 "type" => "Emoji",
@@ -36,10 +43,10 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
               }
             ]
           }
-        }
-    }
+        },
+        name: ":karjalanpiirakka: man"
+      })
 
-    user = %{user | name: ":karjalanpiirakka: man"}
     represented = UserView.render("show.json", %{user: user})
     assert represented["name_html"] == expected
   end
@@ -89,14 +96,15 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "locked" => false,
       "default_scope" => "public",
       "no_rich_text" => false,
-      "fields" => []
+      "fields" => [],
+      "pleroma" => %{"tags" => []}
     }
 
     assert represented == UserView.render("show.json", %{user: user})
   end
 
   test "A user for a given other follower", %{user: user} do
-    {:ok, follower} = UserBuilder.insert(%{following: [User.ap_followers(user)]})
+    follower = insert(:user, %{following: [User.ap_followers(user)]})
     {:ok, user} = User.update_follower_count(user)
     image = "http://localhost:4001/images/avi.png"
     banner = "http://localhost:4001/images/banner.png"
@@ -130,7 +138,8 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "locked" => false,
       "default_scope" => "public",
       "no_rich_text" => false,
-      "fields" => []
+      "fields" => [],
+      "pleroma" => %{"tags" => []}
     }
 
     assert represented == UserView.render("show.json", %{user: user, for: follower})
@@ -172,14 +181,15 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "locked" => false,
       "default_scope" => "public",
       "no_rich_text" => false,
-      "fields" => []
+      "fields" => [],
+      "pleroma" => %{"tags" => []}
     }
 
     assert represented == UserView.render("show.json", %{user: follower, for: user})
   end
 
   test "a user that is a moderator" do
-    user = insert(:user, %{info: %{"is_moderator" => true}})
+    user = insert(:user, %{info: %{is_moderator: true}})
     represented = UserView.render("show.json", %{user: user, for: user})
 
     assert represented["rights"]["delete_others_notice"]
@@ -221,7 +231,8 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
       "locked" => false,
       "default_scope" => "public",
       "no_rich_text" => false,
-      "fields" => []
+      "fields" => [],
+      "pleroma" => %{"tags" => []}
     }
 
     blocker = Repo.get(User, blocker.id)
@@ -243,7 +254,7 @@ defmodule Pleroma.Web.TwitterAPI.UserViewTest do
     user =
       insert(:user, %{
         info: %{
-          "source_data" => %{
+          source_data: %{
             "attachment" =>
               Enum.map(fields, fn field -> Map.put(field, "type", "PropertyValue") end)
           }

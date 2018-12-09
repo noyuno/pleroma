@@ -6,6 +6,30 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   alias Pleroma.Web.OStatus
   alias Pleroma.Web.CommonAPI
   import Pleroma.Factory
+  import Tesla.Mock
+
+  setup do
+    mock(fn env -> apply(HttpRequestMock, :request, [env]) end)
+    :ok
+  end
+
+  test "a note with null content" do
+    note = insert(:note_activity)
+
+    data =
+      note.data
+      |> put_in(["object", "content"], nil)
+
+    note =
+      note
+      |> Map.put(:data, data)
+
+    user = User.get_cached_by_ap_id(note.data["actor"])
+
+    status = StatusView.render("status.json", %{activity: note})
+
+    assert status.content == ""
+  end
 
   test "a note activity" do
     note = insert(:note_activity)

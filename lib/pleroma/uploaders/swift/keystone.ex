@@ -1,11 +1,9 @@
 defmodule Pleroma.Uploaders.Swift.Keystone do
   use HTTPoison.Base
 
-  @settings Application.get_env(:pleroma, Pleroma.Uploaders.Swift)
-
   def process_url(url) do
     Enum.join(
-      [Keyword.fetch!(@settings, :auth_url), url],
+      [Pleroma.Config.get!([Pleroma.Uploaders.Swift, :auth_url]), url],
       "/"
     )
   end
@@ -16,9 +14,10 @@ defmodule Pleroma.Uploaders.Swift.Keystone do
   end
 
   def get_token() do
-    username = Keyword.fetch!(@settings, :username)
-    password = Keyword.fetch!(@settings, :password)
-    tenant_id = Keyword.fetch!(@settings, :tenant_id)
+    settings = Pleroma.Config.get(Pleroma.Uploaders.Swift)
+    username = Keyword.fetch!(settings, :username)
+    password = Keyword.fetch!(settings, :password)
+    tenant_id = Keyword.fetch!(settings, :tenant_id)
 
     case post(
            "/tokens",
@@ -26,10 +25,10 @@ defmodule Pleroma.Uploaders.Swift.Keystone do
            ["Content-Type": "application/json"],
            hackney: [:insecure]
          ) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+      {:ok, %Tesla.Env{status: 200, body: body}} ->
         body["access"]["token"]["id"]
 
-      {:ok, %HTTPoison.Response{status_code: _}} ->
+      {:ok, %Tesla.Env{status: _}} ->
         ""
     end
   end

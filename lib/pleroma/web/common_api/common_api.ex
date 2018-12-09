@@ -8,7 +8,7 @@ defmodule Pleroma.Web.CommonAPI do
   def delete(activity_id, user) do
     with %Activity{data: %{"object" => %{"id" => object_id}}} <- Repo.get(Activity, activity_id),
          %Object{} = object <- Object.normalize(object_id),
-         true <- user.info["is_moderator"] || user.ap_id == object.data["actor"],
+         true <- user.info.is_moderator || user.ap_id == object.data["actor"],
          {:ok, delete} <- ActivityPub.delete(object) do
       {:ok, delete}
     end
@@ -36,7 +36,6 @@ defmodule Pleroma.Web.CommonAPI do
 
   def favorite(id_or_ap_id, user) do
     with %Activity{} = activity <- get_by_id_or_ap_id(id_or_ap_id),
-         false <- activity.data["actor"] == user.ap_id,
          object <- Object.normalize(activity.data["object"]["id"]) do
       ActivityPub.like(user, object)
     else
@@ -47,7 +46,6 @@ defmodule Pleroma.Web.CommonAPI do
 
   def unfavorite(id_or_ap_id, user) do
     with %Activity{} = activity <- get_by_id_or_ap_id(id_or_ap_id),
-         false <- activity.data["actor"] == user.ap_id,
          object <- Object.normalize(activity.data["object"]["id"]) do
       ActivityPub.unlike(user, object)
     else
@@ -72,15 +70,17 @@ defmodule Pleroma.Web.CommonAPI do
 
   def get_visibility(_), do: "public"
 
-  @instance Application.get_env(:pleroma, :instance)
-  @allowed_post_formats Keyword.get(@instance, :allowed_post_formats)
+  defp get_content_type(content_type) do
+    if Enum.member?(Pleroma.Config.get([:instance, :allowed_post_formats]), content_type) do
+      content_type
+    else
+      "text/plain"
+    end
+  end
 
-  defp get_content_type(content_type) when content_type in @allowed_post_formats, do: content_type
-  defp get_content_type(_), do: "text/plain"
-
-  @limit Keyword.get(@instance, :limit)
   def post(user, %{"status" => status} = data) do
     visibility = get_visibility(data)
+    limit = Pleroma.Config.get([:instance, :limit])
 
     with status <- String.trim(status),
          attachments <- attachments_from_ids(data["media_ids"]),
@@ -100,7 +100,7 @@ defmodule Pleroma.Web.CommonAPI do
          context <- make_context(inReplyTo),
          cw <- data["spoiler_text"],
          full_payload <- String.trim(status <> (data["spoiler_text"] || "")),
-         length when length in 1..@limit <- String.length(full_payload),
+         length when length in 1..limit <- String.length(full_payload),
          object <-
            make_note_data(
              user.ap_id,
@@ -135,12 +135,13 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
+  # Updates the emojis for a user based on their profile
   def update(user) do
     user =
       with emoji <- emoji_from_profile(user),
-           source_data <- (user.info["source_data"] || %{}) |> Map.put("tag", emoji),
-           new_info <- Map.put(user.info, "source_data", source_data),
-           change <- User.info_changeset(user, %{info: new_info}),
+           source_data <- (user.info.source_data || %{}) |> Map.put("tag", emoji),
+           info_cng <- Pleroma.User.Info.set_source_data(user.info, source_data),
+           change <- Ecto.Changeset.change(user) |> Ecto.Changeset.put_embed(:info, info_cng),
            {:ok, user} <- User.update_and_set_cache(change) do
         user
       else
